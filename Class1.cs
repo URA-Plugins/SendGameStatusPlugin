@@ -10,12 +10,14 @@ namespace SendGameStatusPlugin
 {
     public class SendGameStatusPlugin : IPlugin
     {
+        [PluginDescription("向AI发送游戏信息")]
         public string Name => "SendGameStatusPlugin";
         public string Author => "UmaAi Team";
         public Version Version => new(1, 0, 0);
+        public string[] Targets => [];
         public async Task UpdatePlugin(ProgressContext ctx)
         {
-            var progress = ctx.AddTask($"[SendGameStatusPlugin] Update");
+            var progress = ctx.AddTask($"[{Name}] 更新");
 
             using var client = new HttpClient();
             using var resp = await client.GetAsync($"https://api.github.com/repos/URA-Plugins/{Name}/releases/latest");
@@ -31,7 +33,12 @@ namespace SendGameStatusPlugin
             }
             progress.Increment(25);
 
-            using var msg = await client.GetAsync(jo["assets"][0]["browser_download_url"].ToString(), HttpCompletionOption.ResponseHeadersRead);
+            var downloadUrl = jo["assets"][0]["browser_download_url"].ToString();
+            if (Config.Updater.IsGithubBlocked && !Config.Updater.ForceUseGithubToUpdate)
+            {
+                downloadUrl = downloadUrl.Replace("https://", "https://gh.shuise.dev/");
+            }
+            using var msg = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
             using var stream = await msg.Content.ReadAsStreamAsync();
             var buffer = new byte[8192];
             while (true)
@@ -103,7 +110,7 @@ namespace SendGameStatusPlugin
                     try
                     {
                         var gameStatusToSend = new GameStatusSend_UAF(@event);
-                        AnsiConsole.MarkupLine("[aqua]AI计算中...[/]");
+                        AnsiConsole.MarkupLine("[aqua]AI所需信息已生成...[/]");
                         var currentGSdirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UmamusumeResponseAnalyzer", "GameData");
                         Directory.CreateDirectory(currentGSdirectory);
 

@@ -1,0 +1,13 @@
+{
+  "Author": "UmaAi Team",
+  "InternalName": "SendGameStatusPlugin",
+  "Name": "向AI发送游戏信息",
+  "Description": "如果AI程序没打开就没任何作用",
+  "Changelog": "",
+  "Version": "1.0.0",
+  "Dependencies": [ "SkillTipsResponseAnalyzer" ],
+  "Targets": [],
+  "RepositoryUrl": "https://github.com/URA-Plugins/SendGameStatusPlugin",
+  "DownloadUrl": "https://gh.shuise.dev/github.com/URA-Plugins/SendGameStatusPlugin/releases/latest/download/SendGameStatusPlugin.zip",
+  "LastUpdate": "1751719983"
+}

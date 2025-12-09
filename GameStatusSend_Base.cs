@@ -27,6 +27,7 @@ namespace SendGameStatusPlugin
     public class GameStatusSend_Base<T>
     where T : PersonBase, new()
     {
+        public int scenarioId; // 剧本ID
         public int umaId;//马娘编号，见KnownUmas.cpp
         public int umaStar;//几星
         public bool islegal;//是否为有效的回合数据
@@ -40,6 +41,7 @@ namespace SendGameStatusPlugin
         public int[] fiveStatusLimit;//五维属性上限，1200以上不减半
         public int skillPt;//技能点
         public int skillScore;//已买技能的分数
+        public int totalHints; // 总共Hint等级
         public int[] trainLevelCount;
 
         public double ptScoreRate;
@@ -49,6 +51,8 @@ namespace SendGameStatusPlugin
         public bool isAiJiao;//爱娇
         public bool isPositiveThinking;//ポジティブ思考，友人第三段出行选上的buff，可以防一次掉心情
         public bool isRefreshMind;//休息的心得,每回合体力+5
+        public bool isIll; // 生病，不区分种类
+        public bool isLucky; // 幸运体质
 
         public int[] zhongMaBlueCount;//种马的蓝因子个数，假设只有3星
         public int[] zhongMaExtraBonus;//种马的剧本因子以及技能白因子（等效成pt），每次继承加多少。全大师杯因子典型值大约是30速30力200pt
@@ -86,7 +90,8 @@ namespace SendGameStatusPlugin
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
             if (
                 (@event.data.chara_info.playing_state == 1) ||
-                (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha)
+                (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha) ||
+                (@event.data.chara_info.playing_state == 36 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Onsen)
                 )
             {
 
@@ -94,6 +99,7 @@ namespace SendGameStatusPlugin
             else
             {
                 //重复显示的回合直接return，就不发了
+                AnsiConsole.WriteLine($"当前回合状态: {playing_state}");
                 return;
             }
 
@@ -136,6 +142,8 @@ namespace SendGameStatusPlugin
             failureRateBias = 0;
             foreach (var effect in @event.data.chara_info.chara_effect_id_array)
             {
+                if (effect <= 6)    // 1-6生病
+                    isIll = true;
                 switch (effect)
                 {
                     case 6:
@@ -148,6 +156,8 @@ namespace SendGameStatusPlugin
                         isAiJiao = true; break;
                     case 25:
                         isPositiveThinking = true; break;
+                    case 26:
+                        isLucky = true; break;
                     case 32:
                         isRefreshMind = true; break;
                 }
@@ -166,6 +176,16 @@ namespace SendGameStatusPlugin
             {
                 AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
                 skillPt = @event.data.chara_info.skill_point;
+            }
+
+            // 计算Hint
+            totalHints = 0;
+            if (EventLogger.lastSkillTips != null)
+            {
+                foreach (var hint in EventLogger.lastSkillTips)
+                {
+                    totalHints += hint.Value.level;
+                }
             }
 
             skillScore = 0;
@@ -249,6 +269,16 @@ namespace SendGameStatusPlugin
                         friend_type = 2;
                         break;
                     case 10104://r 凉花
+                        persons[i].personType = 1;
+                        friend_personId = i;
+                        friend_type = 2;
+                        break;
+                    case 10138: // r健子
+                        persons[i].personType = 1;
+                        friend_personId = i;
+                        friend_type = 1;
+                        break;
+                    case 30276: // ssr健子
                         persons[i].personType = 1;
                         friend_personId = i;
                         friend_type = 2;

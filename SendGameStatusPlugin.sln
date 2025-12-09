@@ -1,9 +1,15 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36212.18 d17.14
+VisualStudioVersion = 17.14.36212.18
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SendGameStatusPlugin", "SendGameStatusPlugin.csproj", "{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UmamusumeResponseAnalyzer", "..\..\UmaAIConnector\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj", "{40B1B873-870E-6870-6ADD-DDF30AEED0BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkillTipsResponseAnalyzer", "..\SkillTipsResponseAnalyzer\SkillTipsResponseAnalyzer.csproj", "{30F411E7-ED04-CA2E-990B-734AC7BD64E0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventLoggerPlugin", "..\EventLoggerPlugin\EventLoggerPlugin.csproj", "{16AD65E1-CF72-765E-BAAA-7EB7B684F577}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +21,18 @@ Global
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40B1B873-870E-6870-6ADD-DDF30AEED0BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40B1B873-870E-6870-6ADD-DDF30AEED0BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40B1B873-870E-6870-6ADD-DDF30AEED0BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40B1B873-870E-6870-6ADD-DDF30AEED0BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30F411E7-ED04-CA2E-990B-734AC7BD64E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30F411E7-ED04-CA2E-990B-734AC7BD64E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30F411E7-ED04-CA2E-990B-734AC7BD64E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30F411E7-ED04-CA2E-990B-734AC7BD64E0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

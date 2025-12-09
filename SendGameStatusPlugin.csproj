@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj" />
+    <ProjectReference Include="..\..\UmaAIConnector\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj" />
     <ProjectReference Include="..\EventLoggerPlugin\EventLoggerPlugin.csproj" />
     <ProjectReference Include="..\SkillTipsResponseAnalyzer\SkillTipsResponseAnalyzer.csproj" />
   </ItemGroup>

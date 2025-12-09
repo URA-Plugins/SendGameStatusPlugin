@@ -185,6 +185,14 @@ namespace SendGameStatusPlugin
                         gameStatusToSend.doSend();
                     }
                 }
+                if (@event.IsScenario(ScenarioType.Onsen) || @event.data.chara_info.scenario_id == 12)
+                {
+                    var gameStatusToSend = new GameStatusSend_Onsen(@event);
+                    if (gameStatusToSend.baseGame.islegal)
+                    {
+                        gameStatusToSend.doSend();
+                    }
+                }
             }
         }
     }

@@ -77,6 +77,7 @@ namespace SendGameStatusPlugin
         /// 游戏状态，不为1时，为重复回合
         /// </summary>
         public int playing_state;
+        public int[] raceHistory;  // 取胜的回合数，从0开始，没赢的不计入
 
         public bool isRepeatTurn()
         {
@@ -120,6 +121,21 @@ namespace SendGameStatusPlugin
             vital = @event.data.chara_info.vital;
             maxVital = @event.data.chara_info.max_vital;
             motivation = @event.data.chara_info.motivation;
+            // raceHistory
+            var history = new List<int>();
+            if (EventLogger.raceHistory != null)
+            {
+                foreach (var t in EventLogger.raceHistory)
+                {
+                    history.Add(t - 1);
+                }
+            }
+            raceHistory = history.ToArray();
+            // 检测是否抓取了比赛信息
+            if (turn > 12 && raceHistory.Length == 0)
+            {
+                AnsiConsole.MarkupLine("[yellow]警告: 未获得胜场信息，AI计算可能出错；请<重新进入>育成刷新[/]");
+            }
 
             fiveStatus = new int[]
             {

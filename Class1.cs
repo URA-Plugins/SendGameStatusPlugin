@@ -54,7 +54,31 @@ namespace SendGameStatusPlugin
 
             progress.StopTask();
         }
-
+        /// 额外把事件数据发给AI分析
+        [Analyzer]
+        public static void AnalyzeEvent(JObject jo)
+        {
+            if (jo["data"] is null || jo["data"] is not JObject data) return;
+            var @event = jo.ToObject<Gallop.SingleModeCheckEventResponse>();
+            if (@event is null || @event.data.unchecked_event_array is null) return;
+            if (@event.data.unchecked_event_array.Length == 0) return;
+            // 这里其实有剧本和事件信息了。
+            // 检查事件选项数量是否>=2 且需要玩家选择（这时肯定不是训练）
+            foreach (var ev in @event.data.unchecked_event_array)
+            {
+                if (ev.event_contents_info.choice_array.Length >= 2 && Database.Events.ContainsKey(ev.story_id))
+                {
+                    // 收录了事件效果，可以发给AI分析
+                    if (@event.IsScenario(ScenarioType.Onsen) || @event.data.chara_info.scenario_id == 12)
+                    {
+                        //AnsiConsole.MarkupLine("[aqua]事件效果已收录...[/]");
+                        var gameStatusToSend = new GameStatusSend_Onsen(@event);
+                        gameStatusToSend.doSend();
+                    }
+                }
+            }
+        }
+        
         [Analyzer(priority: 2)]
         public static void Analyze(JObject jo)
         {

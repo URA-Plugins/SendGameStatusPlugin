@@ -108,9 +108,8 @@ namespace SendGameStatusPlugin
             }
             //var wsSubscribeCount = SubscribeAiInfo.Signal(this);
             //if (wsSubscribeCount > 0 && !this.isRepeatTurn())
-            //    AnsiConsole.MarkupLine("\n[aqua]AI计算中...[/]");
 
-            var currentGSdirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UmamusumeResponseAnalyzer", "PluginData", "SendGameStatusPlugin");
+            var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
             Directory.CreateDirectory(currentGSdirectory);
             var success = false;
             var tried = 0;
@@ -130,7 +129,10 @@ namespace SendGameStatusPlugin
                     AnsiConsole.MarkupLine("[yellow]写入失败[/]");
                 }
             } while (!success && tried < 10);
-            if (!success)
+            if (success)
+            {
+                AnsiConsole.MarkupLine("[teal]回合已保存，等待AI计算[/]");
+            } else 
             {
                 AnsiConsole.MarkupLine($@"[red]写入{currentGSdirectory}/thisTurn.json失败！[/]");
             }

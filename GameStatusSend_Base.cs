@@ -1,6 +1,10 @@
 ﻿using EventLoggerPlugin;
 using Newtonsoft.Json;
 using Spectre.Console;
+using System.Text.RegularExpressions;
+using System.Text.Json;
+using UmamusumeResponseAnalyzer;
+using UmamusumeResponseAnalyzer.Entities;
 
 namespace SendGameStatusPlugin
 {
@@ -79,6 +83,8 @@ namespace SendGameStatusPlugin
         public int playing_state;
         public int[] raceHistory;  // 取胜的回合数，从0开始，没赢的不计入
 
+        public Story story;
+
         public bool isRepeatTurn()
         {
             return this.playing_state != 1;
@@ -88,7 +94,7 @@ namespace SendGameStatusPlugin
         {
             islegal = false;
             playing_state = @event.data.chara_info.playing_state;
-            if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
+            //if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
             if (
                 (@event.data.chara_info.playing_state == 1) ||
                 (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha) ||
@@ -134,7 +140,7 @@ namespace SendGameStatusPlugin
             // 检测是否抓取了比赛信息
             if (turn > 12 && raceHistory.Length == 0)
             {
-                AnsiConsole.MarkupLine("[yellow]警告: 未获得胜场信息，AI计算可能出错；请<重新进入>育成刷新[/]");
+                AnsiConsole.MarkupLine("[yellow]警告: 未获得胜场信息，AI无法准确计算自选比赛；请重新进入育成, 或者比赛后刷新[/]");
             }
 
             fiveStatus = new int[]
@@ -180,7 +186,8 @@ namespace SendGameStatusPlugin
             }
 
             ptScoreRate = 2.0;
-            skillPt = 0;
+
+            /* skillPt = 0;
             try
             {
                 ptScoreRate = isQieZhe ? 2.2 : 2.0;
@@ -193,6 +200,9 @@ namespace SendGameStatusPlugin
                 AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
                 skillPt = @event.data.chara_info.skill_point;
             }
+            */
+            // 260106 暂时换回直接输出pt点数
+            skillPt = @event.data.chara_info.skill_point;
 
             // 计算Hint
             totalHints = 0;
@@ -402,6 +412,19 @@ namespace SendGameStatusPlugin
             {
                 friend_outgoingUsed = 0;
             }
+
+            // 如果有等待选择的事件，则以story字段发送
+            if (@event.data.unchecked_event_array != null)
+            {
+                foreach (var evt in @event.data.unchecked_event_array)
+                {
+                    if (evt.event_contents_info.choice_array.Length >= 2 && Database.Events.ContainsKey(evt.story_id))
+                    {
+                        story = Database.Events[evt.story_id];
+                        break;
+                    }
+                }
+            }
         }
 
         public void doSend()
@@ -414,7 +437,7 @@ namespace SendGameStatusPlugin
             //if (wsSubscribeCount > 0 && !this.isRepeatTurn())
             //    AnsiConsole.MarkupLine("\n[aqua]AI计算中...[/]");
 
-            var currentGSdirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UmamusumeResponseAnalyzer", "GameData");
+            var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
             Directory.CreateDirectory(currentGSdirectory);
             var success = false;
             var tried = 0;

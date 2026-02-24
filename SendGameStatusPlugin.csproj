@@ -1,14 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+	<TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RunPostBuildEvent>Always</RunPostBuildEvent>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\UmaAIConnector\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj" />
+    <ProjectReference Include="..\..\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj" />
     <ProjectReference Include="..\EventLoggerPlugin\EventLoggerPlugin.csproj" />
     <ProjectReference Include="..\SkillTipsResponseAnalyzer\SkillTipsResponseAnalyzer.csproj" />
   </ItemGroup>

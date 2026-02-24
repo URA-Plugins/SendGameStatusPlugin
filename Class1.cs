@@ -4,6 +4,7 @@ using Spectre.Console;
 using System.IO.Compression;
 using UmamusumeResponseAnalyzer;
 using UmamusumeResponseAnalyzer.Plugin;
+using WatsonWebserver.Core;
 
 [assembly: SharedContextWith("SkillTipsResponseAnalyzer")]
 namespace SendGameStatusPlugin
@@ -13,7 +14,6 @@ namespace SendGameStatusPlugin
         [PluginDescription("向AI发送游戏信息")]
         public string Name => "SendGameStatusPlugin";
         public string Author => "UmaAi Team";
-        public Version Version => new(1, 0, 0);
         public string[] Targets => [];
         public async Task UpdatePlugin(ProgressContext ctx)
         {
@@ -24,7 +24,7 @@ namespace SendGameStatusPlugin
             var json = await resp.Content.ReadAsStringAsync();
             var jo = JObject.Parse(json);
 
-            var isLatest = ("v" + Version.ToString()).Equals("v" + jo["tag_name"]?.ToString());
+            var isLatest = ("v" + ((IPlugin)this).Version.ToString()).Equals("v" + jo["tag_name"]?.ToString());
             if (isLatest)
             {
                 progress.Increment(progress.MaxValue);
@@ -54,6 +54,11 @@ namespace SendGameStatusPlugin
 
             progress.StopTask();
         }
+        [Route(WatsonWebserver.Core.HttpMethod.GET, "GetWorkingDirectory")]
+        public static Task GetWorkingDirectory(HttpContextBase ctx)
+        {
+            return ctx.Response.Send(UmamusumeResponseAnalyzer.UmamusumeResponseAnalyzer.WORKING_DIRECTORY);
+        }
         /// 额外把事件数据发给AI分析
         [Analyzer]
         public static void AnalyzeEvent(JObject jo)
@@ -78,7 +83,7 @@ namespace SendGameStatusPlugin
                 }
             }
         }
-        
+
         [Analyzer(priority: 2)]
         public static void Analyze(JObject jo)
         {

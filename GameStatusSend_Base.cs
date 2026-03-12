@@ -439,6 +439,8 @@ namespace SendGameStatusPlugin
 
             var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
             Directory.CreateDirectory(currentGSdirectory);
+            var currentScenarioDirectory = Path.Combine(currentGSdirectory, GetType().Name);
+            Directory.CreateDirectory(currentScenarioDirectory);
             var success = false;
             var tried = 0;
             do
@@ -446,8 +448,8 @@ namespace SendGameStatusPlugin
                 try
                 {
                     var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }; // 去掉空值避免C++端抽风
-                    File.WriteAllText($@"{currentGSdirectory}/thisTurn.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    File.WriteAllText($@"{currentGSdirectory}/turn{this.turn}.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
+                    File.WriteAllText($@"{currentScenarioDirectory}/thisTurn.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
+                    File.WriteAllText($@"{currentScenarioDirectory}/turn{this.turn}.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
                     success = true; // 写入成功，跳出循环
                     break;
                 }
@@ -459,7 +461,7 @@ namespace SendGameStatusPlugin
             } while (!success && tried < 10);
             if (!success)
             {
-                AnsiConsole.MarkupLine($@"[red]写入{currentGSdirectory}/thisTurn.json失败！[/]");
+                AnsiConsole.MarkupLine($@"[red]写入{currentScenarioDirectory}/thisTurn.json失败！[/]");
             }
         }
     }

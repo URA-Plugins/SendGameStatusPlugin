@@ -177,9 +177,10 @@ namespace SendGameStatusPlugin
                     var gameStatusToSend = new GameStatusSend_Cook(@event);
                     if (gameStatusToSend.islegal)
                     {
-                        var currentGSdirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UmamusumeResponseAnalyzer", "GameData");
+                        var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
                         Directory.CreateDirectory(currentGSdirectory);
-
+                        var currentScenarioDirectory = Path.Combine(currentGSdirectory, "GameStatusSend_Cook");
+                        Directory.CreateDirectory(currentScenarioDirectory);
                         var success = false;
                         var tried = 0;
                         do
@@ -187,24 +188,22 @@ namespace SendGameStatusPlugin
                             try
                             {
                                 var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }; // 去掉空值避免C++端抽风
-                                File.WriteAllText($@"{currentGSdirectory}/thisTurn.json", JsonConvert.SerializeObject(gameStatusToSend, Formatting.Indented, settings));
-                                File.WriteAllText($@"{currentGSdirectory}/turn{@event.data.chara_info.turn}.json", JsonConvert.SerializeObject(gameStatusToSend, Formatting.Indented, settings));
+                                File.WriteAllText($@"{currentScenarioDirectory}/thisTurn.json", JsonConvert.SerializeObject(gameStatusToSend, Formatting.Indented, settings));
+                                File.WriteAllText($@"{currentScenarioDirectory}/turn{gameStatusToSend.turn}.json", JsonConvert.SerializeObject(gameStatusToSend, Formatting.Indented, settings));
                                 success = true; // 写入成功，跳出循环
                                 break;
                             }
                             catch
                             {
                                 tried++;
-                                AnsiConsole.MarkupLine("[yellow]写入失败，0.5秒后重试...[/]");
-                                //await Task.Delay(500); // 等待0.5秒
+                                AnsiConsole.MarkupLine("[yellow]写入失败[/]");
                             }
                         } while (!success && tried < 10);
                         if (!success)
                         {
-                            AnsiConsole.MarkupLine($@"[red]写入{currentGSdirectory}/thisTurn.json失败！[/]");
+                            AnsiConsole.MarkupLine($@"[red]写入{currentScenarioDirectory}/thisTurn.json失败！[/]");
                         }
                     }
-
                 }
                 if (@event.IsScenario(ScenarioType.Legend))
                 {
@@ -218,6 +217,14 @@ namespace SendGameStatusPlugin
                 {
                     var gameStatusToSend = new GameStatusSend_Onsen(@event);
                     if (gameStatusToSend.baseGame.islegal)
+                    {
+                        gameStatusToSend.doSend();
+                    }
+                }
+                if (@event.IsScenario(ScenarioType.Mecha))
+                {
+                    var gameStatusToSend = new GameStatusSend_Mecha(@event);
+                    if (gameStatusToSend.islegal)
                     {
                         gameStatusToSend.doSend();
                     }

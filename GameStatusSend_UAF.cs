@@ -1,11 +1,5 @@
 ﻿using EventLoggerPlugin;
 using Spectre.Console;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using UmamusumeResponseAnalyzer.Game.TurnInfo;
 
 namespace SendGameStatusPlugin
 {
@@ -85,7 +79,28 @@ namespace SendGameStatusPlugin
         public int lianghua_outgoingUsed;//凉花的出行已经走了几段了   暂时不考虑其他友人团队卡的出行
 
         //public GameStatusSend_UAF() { }
-        public GameStatusSend_UAF(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_UAF(Gallop.SingleModeSportExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeSportCheckEventResponse ToCheckEventResponse(Gallop.SingleModeSportExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                sport_data_set = @event.data.sport_data_set
+            }
+        };
+
+        public GameStatusSend_UAF(Gallop.SingleModeSportCheckEventResponse @event)
         {
 
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0) || @event.data.race_start_info != null) return;
@@ -144,18 +159,7 @@ namespace SendGameStatusPlugin
             isAiJiao = @event.data.chara_info.chara_effect_id_array.Contains(8);
             isQieZhe = @event.data.chara_info.chara_effect_id_array.Contains(7);
             isPositiveThinking = @event.data.chara_info.chara_effect_id_array.Contains(25);
-            ptScoreRate = 2.1;
-            skillPt = 0;
-            try
-            {
-                ptScoreRate = isQieZhe ? 2.3 : 2.1;
-                double ptScore = AiUtils.calculateSkillScore(@event, ptScoreRate);
-                skillPt = (int)(ptScore / ptScoreRate);
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
-            }
+            ptScoreRate = isQieZhe ? 2.3 : 2.1;
 
             skillScore = 0;
 
@@ -397,8 +401,7 @@ namespace SendGameStatusPlugin
             }
 
             uaf_xiangtanRemain = sportdat.item_id_array.Count(x => x == 6);
-            var turnInfoUAF = new TurnInfoUAF(@event.data);
-            uaf_rankGainIncreased = turnInfoUAF.IsRankGainIncreased;
+            uaf_rankGainIncreased = sportdat.training_array.Sum(x => x.sport_rank) >= 350;
 
             uaf_buffActivated = new int[3];
             for (int i = 0; i < 3; i++)

@@ -42,7 +42,28 @@
         /// </summary>
         public int[] mecha_win_history;
 
-        public GameStatusSend_Mecha(Gallop.SingleModeCheckEventResponse @event) : base(@event)
+        public GameStatusSend_Mecha(Gallop.SingleModeMechaExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeMechaCheckEventResponse ToCheckEventResponse(Gallop.SingleModeMechaExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                mecha_data_set = @event.data.mecha_data_set
+            }
+        };
+
+        public GameStatusSend_Mecha(Gallop.SingleModeMechaCheckEventResponse @event) : base(@event)
         {
             if (!islegal) return;
             var x = @event;

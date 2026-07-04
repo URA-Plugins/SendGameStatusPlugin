@@ -38,7 +38,7 @@ namespace SendGameStatusPlugin
             };
         }
 
-        public OnsenStatus(Gallop.SingleModeCheckEventResponse @event)
+        public OnsenStatus(Gallop.SingleModeOnsenCheckEventResponse @event)
         {
             digVitalCost = EventLogger.vitalSpent;
             // 是否为选择温泉状态
@@ -93,7 +93,28 @@ namespace SendGameStatusPlugin
         public GameStatusSend_Base<PersonBase> baseGame;
         public OnsenStatus onsen;
 
-        public GameStatusSend_Onsen(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_Onsen(Gallop.SingleModeOnsenExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeOnsenCheckEventResponse ToCheckEventResponse(Gallop.SingleModeOnsenExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                onsen_data_set = @event.data.onsen_data_set
+            }
+        };
+
+        public GameStatusSend_Onsen(Gallop.SingleModeOnsenCheckEventResponse @event)
         {
             baseGame = new GameStatusSend_Base<PersonBase>(@event);
             baseGame.scenarioId = 12;
@@ -106,36 +127,7 @@ namespace SendGameStatusPlugin
             {
                 return;
             }
-            //var wsSubscribeCount = SubscribeAiInfo.Signal(this);
-            //if (wsSubscribeCount > 0 && !this.isRepeatTurn())
-
-            var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
-            Directory.CreateDirectory(currentGSdirectory);
-            var success = false;
-            var tried = 0;
-            do
-            {
-                try
-                {
-                    var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }; // 去掉空值避免C++端抽风
-                    File.WriteAllText($@"{currentGSdirectory}/thisTurn.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    File.WriteAllText($@"{currentGSdirectory}/turn{this.baseGame.turn}.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    success = true; // 写入成功，跳出循环
-                    break;
-                }
-                catch
-                {
-                    tried++;
-                    AnsiConsole.MarkupLine("[yellow]写入失败[/]");
-                }
-            } while (!success && tried < 10);
-            if (success)
-            {
-                AnsiConsole.MarkupLine("[teal]回合已保存，等待AI计算[/]");
-            } else 
-            {
-                AnsiConsole.MarkupLine($@"[red]写入{currentGSdirectory}/thisTurn.json失败！[/]");
-            }
+            GameStatusOutput.WriteScenarioData(this, baseGame.turn, logSuccess: true);
         }
     }
 }

@@ -1,13 +1,6 @@
 ﻿using EventLoggerPlugin;
 using SendGameStatusPlugin;
 using Spectre.Console;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using UmamusumeResponseAnalyzer.Game;
-using UmamusumeResponseAnalyzer.Game.TurnInfo;
 
 namespace SendGameStatusPlugin
 {
@@ -90,7 +83,28 @@ namespace SendGameStatusPlugin
         public int friend_stage;//0未点击，1点击还未解锁出行，2已解锁出行
         public int friend_outgoingUsed;//出行已经走了几段了   暂时不考虑其他友人团队卡的出行
 
-        public GameStatusSend_Cook(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_Cook(Gallop.SingleModeCookExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeCookCheckEventResponse ToCheckEventResponse(Gallop.SingleModeCookExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                cook_data_set = @event.data.cook_data_set
+            }
+        };
+
+        public GameStatusSend_Cook(Gallop.SingleModeCookCheckEventResponse @event)
         {
             islegal = false;
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
@@ -157,20 +171,8 @@ namespace SendGameStatusPlugin
                 }
             }
 
-            ptScoreRate = 2.0;
-            skillPt = 0;
-            try
-            {
-                ptScoreRate = isQieZhe ? 2.2 : 2.0;
-                double ptScore = AiUtils.calculateSkillScore(@event, ptScoreRate);
-                skillPt = (int)(ptScore / ptScoreRate);
-                ptScoreRate = 2.0;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
-                skillPt = @event.data.chara_info.skill_point;
-            }
+            ptScoreRate = isQieZhe ? 2.2 : 2.0;
+            skillPt = @event.data.chara_info.skill_point;
 
             skillScore = 0;
             cardId = new int[6];

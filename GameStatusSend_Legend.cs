@@ -1,7 +1,7 @@
 ﻿using EventLoggerPlugin;
 using Gallop;
 using Newtonsoft.Json;
-using Spectre.Console;
+using UmamusumeResponseAnalyzer;
 using GameGlobal = SendGameStatusPlugin.GameGlobal;
 
 namespace SendGameStatusPlugin
@@ -95,7 +95,28 @@ namespace SendGameStatusPlugin
         public bool friend_qingre;//团卡是否情热
         public int friend_qingreTurn;//团卡连续情热多少回合了
 
-        public GameStatusSend_Legend(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_Legend(Gallop.SingleModeLegendExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeLegendCheckEventResponse ToCheckEventResponse(Gallop.SingleModeLegendExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                legend_data_set = @event.data.legend_data_set
+            }
+        };
+
+        public GameStatusSend_Legend(Gallop.SingleModeLegendCheckEventResponse @event)
         {
             islegal = true;
             scenarioId = 10;
@@ -195,19 +216,7 @@ namespace SendGameStatusPlugin
             }
 
 
-            skillPt = 0;
-            try
-            {
-                var ptScoreRate = isQieZhe ? 2.2 : 2.0;
-                var ptScore = AiUtils.calculateSkillScore(@event, ptScoreRate);
-                skillPt = (int)(ptScore / ptScoreRate);
-                ptScoreRate = 2.0;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
-                skillPt = @event.data.chara_info.skill_point;
-            }
+            skillPt = @event.data.chara_info.skill_point;
 
             skillScore = 0;
             cardId = new int[6];
@@ -237,10 +246,10 @@ namespace SendGameStatusPlugin
             var turnStat = GameStats.stats[@event.data.chara_info.turn];
             if (turnStat == null)
             {
-                AnsiConsole.MarkupLine($"[yellow]获取训练等级信息出错[/]");
+                GameStatusOutput.LogWarning("获取训练等级信息出错");
                 for (var i = 0; i < 5; i++)
                 {
-                    var trId = @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
+                    var trId = @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
                         GameGlobal.TrainIds[i];
                     var trLevel = @event.data.chara_info.training_level_info_array.First(x => x.command_id == trId).level;
                     var count = (trLevel - 1) * trainLevelClickNumEvery;
@@ -326,7 +335,7 @@ namespace SendGameStatusPlugin
                 foreach (var p in train.training_partner_array)
                 {
                     var personIdUmaAi = p == 102 ? 6 : p == 103 ? 7 : p >= 1000 ?
-                        GameGlobal.ToTrainIndex[UmamusumeResponseAnalyzer.Database.Names.GetRSupportCardTypeByCharaId(p)] + 10 //npc
+                        GameGlobal.ToTrainIndex[Database.Names.GetRSupportCardTypeByCharaId(p)] + 10 //npc
                         : p - 1; //支援卡
                     personDistribution[trainId, j] = personIdUmaAi;
                     j += 1;
@@ -506,7 +515,7 @@ namespace SendGameStatusPlugin
                     {
                         if (f.training_partner_id > 1000)
                         {
-                            var c = UmamusumeResponseAnalyzer.Database.Names.GetRSupportCardTypeByCharaId(f.training_partner_id);
+                            var c = Database.Names.GetRSupportCardTypeByCharaId(f.training_partner_id);
                             c = c < 0 ? -1 : GameGlobal.ToTrainIndex[c];//未知是-1
 
                             npcIdToTrain.Add(f.training_partner_id, c);
@@ -518,27 +527,12 @@ namespace SendGameStatusPlugin
                         throw new Exception($"NPC不是5个");
                     }
                     var unknownCount = npcIdToTrain.Count(x => x.Value < 0);
-                    if (unknownCount >= 2)
+                    if (unknownCount > 0)
                     {
-                        AnsiConsole.MarkupLine("[red]不少于2个NPC无法获取属性，无法运行ai，请及时更新数据[/]");
+                        var unknownIds = string.Join(", ", npcIdToTrain.Where(x => x.Value < 0).Select(x => x.Key));
+                        GameStatusOutput.LogError($"NPC(id={unknownIds})无法获取属性，无法运行ai，请及时更新数据");
                         islegal = false;
                         return;
-                    }
-
-                    if (unknownCount == 1)
-                    {
-                        var unknownId = npcIdToTrain.First(x => x.Value < 0).Key;
-                        for (var i = 0; i < 5; i++)
-                        {
-                            if (npcIdToTrain.Count(x => x.Value == i) == 0)
-                            {
-                                npcIdToTrain[unknownId] = i;
-                                if (turn == 36)
-                                {
-                                    AnsiConsole.MarkupLine($"[yellow]有1个NPC(id={unknownId})无法获取属性，已推断为{GameGlobal.TrainIds[i]}，建议及时更新数据[/]");
-                                }
-                            }
-                        }
                     }
 
                     foreach (var f in lg.masterly_bonus_info.info_9048.friend_gauge_array)
@@ -557,36 +551,9 @@ namespace SendGameStatusPlugin
             {
                 return;
             }
-            //var wsSubscribeCount = SubscribeAiInfo.Signal(this);
-            //if (wsSubscribeCount > 0)
-            //    AnsiConsole.MarkupLine("\n[aqua]AI计算中...[/]");
-
-            var currentGSdirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UmamusumeResponseAnalyzer", "GameData");
-            Directory.CreateDirectory(currentGSdirectory);
-            var success = false;
-            var tried = 0;
-            do
-            {
-                try
-                {
-                    var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }; // 去掉空值避免C++端抽风
-                    File.WriteAllText($@"{currentGSdirectory}/thisTurn.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    File.WriteAllText($@"{currentGSdirectory}/turn{this.turn}.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    success = true; // 写入成功，跳出循环
-                    break;
-                }
-                catch
-                {
-                    tried++;
-                    AnsiConsole.MarkupLine("[yellow]写入失败[/]");
-                }
-            } while (!success && tried < 10);
-            if (!success)
-            {
-                AnsiConsole.MarkupLine($@"[red]写入{currentGSdirectory}/thisTurn.json失败！[/]");
-            }
+            GameStatusOutput.WriteScenarioData(this, turn);
         }
-        public static int GetCommandInfoStage_legend(SingleModeCheckEventResponse @event)
+        public static int GetCommandInfoStage_legend(SingleModeLegendCheckEventResponse @event)
         {
             //if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
             if (@event.data.chara_info.playing_state == 1 && (@event.data.unchecked_event_array == null || @event.data.unchecked_event_array.Length == 0))

@@ -1,13 +1,7 @@
 ﻿using EventLoggerPlugin;
 using Gallop;
 using Spectre.Console;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using UmamusumeResponseAnalyzer.Game;
 using ScoreUtils = EventLoggerPlugin.ScoreUtils;
 
 namespace SendGameStatusPlugin
@@ -122,7 +116,28 @@ namespace SendGameStatusPlugin
         //public int[] larc_ssValue;//ss的速耐力根智（不包括上层的属性）
         //public int larc_ssFailRate;//ss的失败率
         //public GameStatusSend_LArc() { }
-        public GameStatusSend_LArc(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_LArc(Gallop.SingleModeArcExecCommandResponse @event) : this(ToCheckEventResponse(@event))
+        {
+        }
+
+        private static Gallop.SingleModeArcCheckEventResponse ToCheckEventResponse(Gallop.SingleModeArcExecCommandResponse @event) => new()
+        {
+            data = new()
+            {
+                chara_info = @event.data.chara_info,
+                gain_parameter_info = @event.data.gain_parameter_info,
+                not_up_parameter_info = @event.data.not_up_parameter_info,
+                not_down_parameter_info = @event.data.not_down_parameter_info,
+                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
+                home_info = @event.data.home_info,
+                unchecked_event_array = @event.data.unchecked_event_array,
+                race_condition_array = @event.data.race_condition_array,
+                race_start_info = null,
+                arc_data_set = @event.data.arc_data_set
+            }
+        };
+
+        public GameStatusSend_LArc(Gallop.SingleModeArcCheckEventResponse @event)
         {
 
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0) || @event.data.race_start_info != null) return;
@@ -163,17 +178,6 @@ namespace SendGameStatusPlugin
             };
 
             skillPt = @event.data.chara_info.skill_point;
-
-            try
-            {
-                var ptRate = isQieZhe ? 2.1 : 1.9;
-                var ptScore = AiUtils.calculateSkillScore(@event, ptRate);
-                skillPt = (int)(ptScore / ptRate);
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
-            }
 
             skillScore = 0;
 
@@ -432,7 +436,7 @@ namespace SendGameStatusPlugin
                 var currentFiveValue = fiveStatus;
 
                 var trainItems = new Dictionary<int, SingleModeCommandInfo>();
-                if (@event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.LArc)
+                if (@event.data.chara_info.scenario_id == (int)ScenarioType.LArc)
                 {
                     //LArc的合宿ID不一样，所以要单独处理
                     trainItems.Add(101, @event.data.home_info.command_info_array.Any(x => x.command_id == 1101) ? @event.data.home_info.command_info_array.First(x => x.command_id == 1101) : @event.data.home_info.command_info_array.First(x => x.command_id == 101));

@@ -1,6 +1,5 @@
 ﻿using EventLoggerPlugin;
 using Newtonsoft.Json;
-using Spectre.Console;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using UmamusumeResponseAnalyzer;
@@ -90,15 +89,23 @@ namespace SendGameStatusPlugin
             return this.playing_state != 1;
         }
 
-        public GameStatusSend_Base(Gallop.SingleModeCheckEventResponse @event)
+        public GameStatusSend_Base(Gallop.SingleModeMechaCheckEventResponse @event) : this(CheckEventContext.From(@event))
+        {
+        }
+
+        public GameStatusSend_Base(Gallop.SingleModeOnsenCheckEventResponse @event) : this(CheckEventContext.From(@event))
+        {
+        }
+
+        private GameStatusSend_Base(CheckEventContext @event)
         {
             islegal = false;
             playing_state = @event.data.chara_info.playing_state;
             //if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
             if (
                 (@event.data.chara_info.playing_state == 1) ||
-                (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha) ||
-                (@event.data.chara_info.playing_state == 36 && @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Onsen)
+                (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha) ||
+                (@event.data.chara_info.playing_state == 36 && @event.data.chara_info.scenario_id == (int)ScenarioType.Onsen)
                 )
             {
 
@@ -106,7 +113,7 @@ namespace SendGameStatusPlugin
             else
             {
                 //重复显示的回合直接return，就不发了
-                AnsiConsole.WriteLine($"当前回合状态: {playing_state}");
+                GameStatusOutput.LogInfo($"当前回合状态: {playing_state}");
                 return;
             }
 
@@ -140,7 +147,7 @@ namespace SendGameStatusPlugin
             // 检测是否抓取了比赛信息
             if (turn > 12 && raceHistory.Length == 0)
             {
-                AnsiConsole.MarkupLine("[yellow]警告: 未获得胜场信息，AI无法准确计算自选比赛；请重新进入育成, 或者比赛后刷新[/]");
+                GameStatusOutput.LogWarning("警告: 未获得胜场信息，AI无法准确计算自选比赛；请重新进入育成, 或者比赛后刷新");
             }
 
             fiveStatus = new int[]
@@ -187,32 +194,10 @@ namespace SendGameStatusPlugin
 
             ptScoreRate = 2.0;
 
-            /* skillPt = 0;
-            try
-            {
-                ptScoreRate = isQieZhe ? 2.2 : 2.0;
-                var ptScore = AiUtils.calculateSkillScore(@event, ptScoreRate);
-                skillPt = (int)(ptScore / ptScoreRate);
-                ptScoreRate = 2.0;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine("获取当前技能分失败" + ex.Message);
-                skillPt = @event.data.chara_info.skill_point;
-            }
-            */
-            // 260106 暂时换回直接输出pt点数
             skillPt = @event.data.chara_info.skill_point;
 
-            // 计算Hint
+            // 新 ABI 下暂无公共 hint API。
             totalHints = 0;
-            if (EventLogger.lastSkillTips != null)
-            {
-                foreach (var hint in EventLogger.lastSkillTips)
-                {
-                    totalHints += hint.Value.level;
-                }
-            }
 
             skillScore = 0;
             cardId = new int[6];
@@ -242,10 +227,10 @@ namespace SendGameStatusPlugin
             var turnStat = GameStats.stats[@event.data.chara_info.turn];
             if (turnStat == null)
             {
-                AnsiConsole.MarkupLine($"[yellow]获取训练等级信息出错[/]");
+                GameStatusOutput.LogWarning("获取训练等级信息出错");
                 for (var i = 0; i < 5; i++)
                 {
-                    var trId = @event.data.chara_info.scenario_id == (int)UmamusumeResponseAnalyzer.ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
+                    var trId = @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
                         GameGlobal.TrainIds[i];
                     var trLevel = @event.data.chara_info.training_level_info_array.First(x => x.command_id == trId).level;
                     var count = (trLevel - 1) * trainLevelClickNumEvery;
@@ -433,36 +418,7 @@ namespace SendGameStatusPlugin
             {
                 return;
             }
-            //var wsSubscribeCount = SubscribeAiInfo.Signal(this);
-            //if (wsSubscribeCount > 0 && !this.isRepeatTurn())
-            //    AnsiConsole.MarkupLine("\n[aqua]AI计算中...[/]");
-
-            var currentGSdirectory = Path.Combine("PluginData", "SendGameStatusPlugin");
-            Directory.CreateDirectory(currentGSdirectory);
-            var currentScenarioDirectory = Path.Combine(currentGSdirectory, GetType().Name);
-            Directory.CreateDirectory(currentScenarioDirectory);
-            var success = false;
-            var tried = 0;
-            do
-            {
-                try
-                {
-                    var settings = new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }; // 去掉空值避免C++端抽风
-                    File.WriteAllText($@"{currentScenarioDirectory}/thisTurn.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    File.WriteAllText($@"{currentScenarioDirectory}/turn{this.turn}.json", JsonConvert.SerializeObject(this, Formatting.Indented, settings));
-                    success = true; // 写入成功，跳出循环
-                    break;
-                }
-                catch
-                {
-                    tried++;
-                    AnsiConsole.MarkupLine("[yellow]写入失败[/]");
-                }
-            } while (!success && tried < 10);
-            if (!success)
-            {
-                AnsiConsole.MarkupLine($@"[red]写入{currentScenarioDirectory}/thisTurn.json失败！[/]");
-            }
+            GameStatusOutput.WriteScenarioData(this, turn);
         }
     }
 }

@@ -1,16 +1,23 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	<TargetFramework>net10.0</TargetFramework>
+    <IsUraPlugin>true</IsUraPlugin>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RunPostBuildEvent>Always</RunPostBuildEvent>
+
+    <PluginDisplayName>向AI发送游戏信息</PluginDisplayName>
+    <PluginAuthor>UmaAi Team</PluginAuthor>
+    <PluginDescription>如果AI程序没打开就没任何作用</PluginDescription>
+    <PluginRepositoryUrl>https://github.com/URA-Plugins/SendGameStatusPlugin</PluginRepositoryUrl>
+    <PluginDependencies>EventLoggerPlugin</PluginDependencies>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj" />
-    <ProjectReference Include="..\EventLoggerPlugin\EventLoggerPlugin.csproj" />
-    <ProjectReference Include="..\SkillTipsResponseAnalyzer\SkillTipsResponseAnalyzer.csproj" />
+    <ProjectReference Include="..\EventLoggerPlugin\EventLoggerPlugin.csproj">
+      <Private>False</Private>
+    </ProjectReference>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
   <ItemGroup>
@@ -45,15 +52,4 @@
       <Generator>PublicResXFileCodeGenerator</Generator>
     </EmbeddedResource>
   </ItemGroup>
-
-  <ItemGroup>
-    <None Update="manifest.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="copy /Y &quot;$(TargetPath)&quot; &quot;%25localappdata%25/UmamusumeResponseAnalyzer/Plugins/SendGameStatusPlugin/&quot;" />
-  </Target>
-
 </Project>

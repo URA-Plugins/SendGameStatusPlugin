@@ -8,7 +8,7 @@ namespace SendGameStatusPlugin
     {
         public static readonly int[] TrainIds = [101, 105, 102, 103, 106];
         public static readonly int[] TrainIdsMecha = [901, 105, 902, 103, 906]; //Mecha杯（9号剧本）
-        public static readonly String[] TrainEnglishName = ["speed", "stamina", "power", "guts", "wiz"];
+        public static readonly string[] TrainEnglishName = ["speed", "stamina", "power", "guts", "wiz"];
         public static readonly FrozenDictionary<int, int> XiahesuIds = new Dictionary<int, int>
         {
             { 101, 601 },

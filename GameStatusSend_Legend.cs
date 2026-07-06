@@ -202,7 +202,7 @@ namespace SendGameStatusPlugin
             }
 
             //统计连续情热了多少回合
-            if (@event.data.chara_info.chara_effect_id_array.Any(x => x == 104))
+            if (@event.data.chara_info.chara_effect_id_array.Contains(104))
             {
                 //统计一下女神情热持续了几回合
                 var continuousTurnNum = 0;
@@ -240,7 +240,7 @@ namespace SendGameStatusPlugin
                 }
             }
 
-            trainLevelCount = new int[5] { 0, 0, 0, 0, 0 };
+            trainLevelCount = new int[5];
 
             var trainLevelClickNumEvery = 4;
             var turnStat = GameStats.stats[@event.data.chara_info.turn];
@@ -351,7 +351,6 @@ namespace SendGameStatusPlugin
             {
                 var istrainlocked = false;
                 var enableidx = -1;
-                var command = @event.data.home_info.command_info_array;
                 foreach (var train in @event.data.home_info.command_info_array)
                 {
                     if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
@@ -377,7 +376,7 @@ namespace SendGameStatusPlugin
             }
 
             friend_stage = 0;
-            friend_outgoingUsed = new bool[5] { false, false, false, false, false };
+            friend_outgoingUsed = new bool[5];
             //友人出行用了几次
             if (friend_type != 0)
             {
@@ -401,7 +400,7 @@ namespace SendGameStatusPlugin
                             break;
                         }
 
-                        if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Contains(GameStats.stats[t].playerChoice)) //没训练
                             continue;
                         if (GameStats.stats[t].isTrainingFailed)//训练失败
                             continue;
@@ -416,15 +415,7 @@ namespace SendGameStatusPlugin
                 }
 
             }
-            else
-            {
-                //friend_outgoingUsed = 0;
-            }
-
-
-
             if (!islegal) return;
-            var x = @event;
             var lg = @event.data.legend_data_set;
 
 
@@ -462,8 +453,6 @@ namespace SendGameStatusPlugin
                 lg_haveBuff = new bool[57];
                 for (int i = 0; i < 10; i++)
                     lg_buffs[i] = new ScenarioBuffInfo_Legend();
-                for (int i = 0; i < 57; i++)
-                    lg_haveBuff[i] = false;
                 int buffIdx = 0;
                 foreach (var buff in lg.buff_info_array)
                 {
@@ -490,8 +479,8 @@ namespace SendGameStatusPlugin
                 lg_green_active = false;
                 lg_green_continuationZoneCount = 0;
                 lg_green_currentStepCount = 0;
-                lg_red_friendsGauge = new int[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-                lg_red_friendsLv = new int[16] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+                lg_red_friendsGauge = new int[16];
+                lg_red_friendsLv = new int[16];
 
 
                 if (lg_mainColor == 0)
@@ -547,7 +536,7 @@ namespace SendGameStatusPlugin
         }
         public void doSend()
         {
-            if (this.islegal == false)
+            if (!islegal)
             {
                 return;
             }

@@ -1,7 +1,5 @@
 ﻿using EventLoggerPlugin;
 using Gallop;
-using Newtonsoft.Json;
-using Spectre.Console;
 
 namespace SendGameStatusPlugin
 {
@@ -58,14 +56,14 @@ namespace SendGameStatusPlugin
                 }
                 foreach (var x in dataset.dug_onsen_id_array)
                 {
-                    onsenState[x-1] = true;
+                    onsenState[x - 1] = true;
                 }
                 digCount = dataset.dug_onsen_id_array.Length - 1;   // 不算初始温泉
-                for (var i=0; i<dataset.onsen_info_array.Length; i++)
+                for (var i = 0; i < dataset.onsen_info_array.Length; i++)
                 {
                     if (dataset.onsen_info_array[i].state == 2)
                         currentOnsen = i;
-                    for (var j=0; j<dataset.onsen_info_array[i].stratum_info_array.Length; j++)
+                    for (var j = 0; j < dataset.onsen_info_array[i].stratum_info_array.Length; j++)
                     {
                         var stratumInfo = dataset.onsen_info_array[i].stratum_info_array[j];                        
                         if (stratumInfo.rest_volume > 0)
@@ -78,7 +76,7 @@ namespace SendGameStatusPlugin
                         }
                     }
                 }
-                for (var i=0; i<dataset.dig_effect_info_array.Length; i++)
+                for (var i = 0; i < dataset.dig_effect_info_array.Length; i++)
                 {
                     var value = dataset.dig_effect_info_array[i];
                     digPower[i] = value.dig_effect_value;
@@ -123,7 +121,7 @@ namespace SendGameStatusPlugin
 
         public void doSend()
         {
-            if (this.baseGame.islegal == false)
+            if (!baseGame.islegal)
             {
                 return;
             }

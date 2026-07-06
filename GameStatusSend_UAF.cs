@@ -1,5 +1,4 @@
 ﻿using EventLoggerPlugin;
-using Spectre.Console;
 
 namespace SendGameStatusPlugin
 {
@@ -15,16 +14,6 @@ namespace SendGameStatusPlugin
         public int groupCardShiningContinuousTurns;//团队卡情热了几个回合了（下回合结束情热的概率与此有关，数据可以在大师杯版ai里找到）
 
         //isShining, larc_isLinkCard, distribution 在ai里计算
-        public UAFPerson()
-        {
-            isCard = false;
-            personType = 0;
-            friendship = 0;
-            isHint = false;
-            cardRecord = 0;
-            friendOrGroupCardStage = 0;
-            groupCardShiningContinuousTurns = 0;
-        }
     }
 
     public class GameStatusSend_UAF
@@ -120,7 +109,7 @@ namespace SendGameStatusPlugin
             umaId = @event.data.chara_info.card_id;
             umaStar = @event.data.chara_info.rarity;
             //turn
-            int turnNum = @event.data.chara_info.turn;//游戏里回合数从1开始
+            var turnNum = @event.data.chara_info.turn;//游戏里回合数从1开始
             turn = turnNum - 1;//ai里回合数从0开始
             vital = @event.data.chara_info.vital;
             maxVital = @event.data.chara_info.max_vital;
@@ -164,10 +153,6 @@ namespace SendGameStatusPlugin
             skillScore = 0;
 
             cardId = new int[6];
-
-            isPositiveThinking = @event.data.chara_info.chara_effect_id_array.Contains(25);
-
-            var LArcIsAbroad = (turnNum >= 37 && turnNum <= 43) || (turnNum >= 61 && turnNum <= 67);
 
             zhongMaBlueCount = new int[5];
             //用属性上限猜蓝因子个数
@@ -229,7 +214,6 @@ namespace SendGameStatusPlugin
                     persons[i].personType = 1;
 
                     persons[i].friendship = @event.data.chara_info.evaluation_info_array[i].evaluation;
-                    ;
                     lianghua_personId = i;
                 }
                 else if (cardId[i] / 10 == 30137)//神团
@@ -323,9 +307,9 @@ namespace SendGameStatusPlugin
                 if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
                     continue;
                 //Console.WriteLine("!");
-                int trainId = GameGlobal.ToTrainIndex[train.command_id];
+                var trainId = GameGlobal.ToTrainIndex[train.command_id];
 
-                int j = 0;
+                var j = 0;
                 foreach (var p in train.training_partner_array)
                 {
                     personDistribution[trainId, j] = p == 102 ? 6 : p == 103 ? 7 : p == 111 ? 8 : p - 1;
@@ -339,9 +323,8 @@ namespace SendGameStatusPlugin
             }
 
             //计算Lockedtrainid
-            bool istrainlocked = false;
-            int enableidx = -1;
-            var command = @event.data.home_info.command_info_array;
+            var istrainlocked = false;
+            var enableidx = -1;
             foreach (var train in @event.data.home_info.command_info_array)
             {
                 if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
@@ -383,19 +366,15 @@ namespace SendGameStatusPlugin
             }
             //winhistory
             uaf_winHistory = new bool[75]; //每15个是一次结果，分别是蓝红黄 五个属性顺序
-            for (int i = 0; i < 75; i++)
-            {
-                uaf_winHistory[i] = false;
-            }
             //int uafcount = 0;
             foreach (var result in sportdat.competition_result_array)
             {
-                int uafcount = result.compe_type;
+                var uafcount = result.compe_type;
                 //uafcount++;
                 foreach (var item in result.win_command_id_array)
                 {
-                    int color = (Convert.ToInt32(item) % 1000) / 100;
-                    int type = (Convert.ToInt32(item) % 10);
+                    var color = (Convert.ToInt32(item) % 1000) / 100;
+                    var type = Convert.ToInt32(item) % 10;
                     uaf_winHistory[(uafcount - 1) * 15 + (color - 1) * 5 + type - 1] = true;
                 }
             }
@@ -406,7 +385,7 @@ namespace SendGameStatusPlugin
             uaf_buffActivated = new int[3];
             for (int i = 0; i < 3; i++)
             {
-                int summ = 0;
+                var summ = 0;
                 for (int j = 0; j < 5; j++)
                 {
                     summ += sportdat.training_array[i * 5 + j].sport_rank;
@@ -435,7 +414,7 @@ namespace SendGameStatusPlugin
                         if (GameStats.stats[t] == null)
                             break;
 
-                        if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Contains(GameStats.stats[t].playerChoice)) //没训练
                             continue;
                         if (GameStats.stats[t].isTrainingFailed)//训练失败
                             continue;
@@ -446,7 +425,6 @@ namespace SendGameStatusPlugin
                         break;
                     }
                     if (lianghuaClicked) lianghua_outgoingStage = 1;
-                    else lianghua_outgoingStage = 0;
                 }
             }
             else

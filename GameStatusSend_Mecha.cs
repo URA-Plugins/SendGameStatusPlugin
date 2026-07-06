@@ -66,7 +66,6 @@
         public GameStatusSend_Mecha(Gallop.SingleModeMechaCheckEventResponse @event) : base(@event)
         {
             if (!islegal) return;
-            var x = @event;
             var mecha = @event.data.mecha_data_set;
             var stage = @event.data.chara_info.playing_state == 1 ? 1 : //训练回合
                 @event.data.chara_info.playing_state == 26 ? 2 :  //选升级回合
@@ -77,11 +76,6 @@
                 throw new Exception($"GameStatusSend_Mecha playing_state={@event.data.chara_info.playing_state}");
             }
             gameStage = stage;
-
-
-
-
-
             if (mecha != null)
             {
                 mecha_rivalLv = new[] {
@@ -92,7 +86,7 @@
                     mecha.rival_info.wiz
                 };
                 mecha_overdrive_energy = mecha.overdrive_info.remain_num * 3 + mecha.overdrive_info.energy_num;
-                mecha_overdrive_enabled = mecha.overdrive_info.over_drive_state > 0 ? true : false;
+                mecha_overdrive_enabled = mecha.overdrive_info.over_drive_state > 0;
                 if (stage == 1 && mecha.overdrive_info.is_overdrive_burst > 0 && !mecha_overdrive_enabled)//ura期间连续开overdrive，还没开的时候不发给umaai
                 {
                     islegal = false;
@@ -113,14 +107,14 @@
                     for (var j = 0; j < 3; ++j)
                         mecha_upgrade[i][j] = board.chip_info_array[j].point;
                 }
-                mecha_win_history = new int[5] { 0, 0, 0, 0, 0 };
+                mecha_win_history = new int[5];
                 for (var i = 0; i < 5; ++i)
                 {
                     if (mecha.upgrade_race_result_array.Any(x => x.schedule_id == i + 1))
                         mecha_win_history[i] = mecha.upgrade_race_result_array.First(x => x.schedule_id == i + 1).result_type - 1;
                 }
 
-                mecha_hasGear = new bool[] { false, false, false, false, false };
+                mecha_hasGear = new bool[5];
                 for (var i = 0; i < 5; ++i)
                 {
                     var tid = GameGlobal.TrainIds[i];

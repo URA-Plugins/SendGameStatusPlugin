@@ -52,6 +52,18 @@ public partial class SendGameStatusPlugin : IPlugin
                 if (contentLength > 0)
                     progress.Increment((double)read / contentLength * 50);
             }
+             if (@event.IsScenario(ScenarioType.Legend))
+ {
+     if (GameStatusSend_Legend.GetCommandInfoStage_legend(@event) == 5 || GameStatusSend_Legend.GetCommandInfoStage_legend(@event) == 3)
+     {
+         //收录了效果，可以发给AI分析，分别是选心得事件和老登三选一事件
+         AnsiConsole.MarkupLine("[aqua]检测到老登杯特殊事件，正在发送给AI分析...[/]");
+         var gameStatusToSend = new GameStatusSend_Legend(@event);
+        gameStatusToSend.doSend();
+         
+        
+     }
+ }
         }
 
         memoryStream.Position = 0;

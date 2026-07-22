@@ -1,7 +1,5 @@
 ﻿using EventLoggerPlugin;
 using Gallop;
-using Spectre.Console;
-using System.Text.RegularExpressions;
 using ScoreUtils = EventLoggerPlugin.ScoreUtils;
 
 namespace SendGameStatusPlugin
@@ -115,7 +113,6 @@ namespace SendGameStatusPlugin
         //这两个可能有误差，但为了保证一致性，最好还是直接采用ai自己算的数值
         //public int[] larc_ssValue;//ss的速耐力根智（不包括上层的属性）
         //public int larc_ssFailRate;//ss的失败率
-        //public GameStatusSend_LArc() { }
         public GameStatusSend_LArc(Gallop.SingleModeArcExecCommandResponse @event) : this(ToCheckEventResponse(@event))
         {
         }
@@ -139,6 +136,7 @@ namespace SendGameStatusPlugin
 
         public GameStatusSend_LArc(Gallop.SingleModeArcCheckEventResponse @event)
         {
+            var round = EventLogger.Current;
 
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0) || @event.data.race_start_info != null) return;
 
@@ -187,12 +185,12 @@ namespace SendGameStatusPlugin
 
             isPositiveThinking = @event.data.chara_info.chara_effect_id_array.Contains(25);
 
-            var LArcIsAbroad = (turnNum >= 37 && turnNum <= 43) || (turnNum >= 61 && turnNum <= 67);
-
             trainLevelCount = new int[5];
             for (var i = 0; i < 5; i++)
             {
-                trainLevelCount[i] = (GameStats.stats[turnNum].trainLevel[i] - 1) * 4 + GameStats.stats[turnNum].trainLevelCount[i];
+                var turnStats = round.Turns[turnNum]
+                    ?? throw new InvalidOperationException($"EventLogger 缺少第 {turnNum} 回合状态。");
+                trainLevelCount[i] = (turnStats.TrainLevel[i] - 1) * 4 + turnStats.TrainLevelCount[i];
             }
 
             zhongMaBlueCount = new int[5];
@@ -214,7 +212,7 @@ namespace SendGameStatusPlugin
             }
             zhongMaExtraBonus = new int[6] { 10, 10, 30, 0, 10, 70 };//大师杯,青春杯,凯旋门因子混合
 
-            motivationDropCount = GameStats.m_motDropCount;
+            motivationDropCount = round.MotivationDropCount;
 
             if (turnNum >= 3)
             {
@@ -223,7 +221,7 @@ namespace SendGameStatusPlugin
 
                 larc_isSSS = @event.data.arc_data_set.selection_info != null && @event.data.arc_data_set.selection_info.is_special_match == 1;//是否为sss
                 larc_ssWin = @event.data.arc_data_set.arc_rival_array.Sum(x => x.star_lv);
-                larc_ssWinSinceLastSSS = GameStats.m_contNonSSS;
+                larc_ssWinSinceLastSSS = round.ConsecutiveNonSssCount;
 
                 larc_levels = new int[10];
                 for (var i = 0; i < 10; i++)
@@ -296,18 +294,18 @@ namespace SendGameStatusPlugin
                 larc_zuoyueOutgoingUsed = d.story_step;//佐岳外出走了几段了
 
                 larc_zuoyueFirstClick = false;//佐岳是否点过第一次
-                for (var t = GameStats.currentTurn; t >= 1; t--)
+                for (var t = round.CurrentTurn; t >= 1; t--)
                 {
-                    if (GameStats.stats[t] == null)
+                    if (round.Turns[t] is not { } stats)
                     {
                         break;
                     }
 
-                    if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                    if (!GameGlobal.TrainIds.Any(x => x == stats.PlayerChoice)) //没训练
                         continue;
-                    if (GameStats.stats[t].isTrainingFailed)//训练失败
+                    if (stats.IsTrainingFailed)//训练失败
                         continue;
-                    if (!GameStats.stats[t].larc_zuoyueAtTrain[GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice]])
+                    if (!stats.LArcFriendAtTrain[GameGlobal.ToTrainIndex[stats.PlayerChoice]])
                         continue;//没点佐岳
 
                     larc_zuoyueFirstClick = true;
@@ -375,7 +373,7 @@ namespace SendGameStatusPlugin
 
                     persons[i].larc_charge = p.rival_boost;
                     persons[i].larc_statusType = GameGlobal.ToTrainIndex[p.command_id];
-                    persons[i].larc_specialBuff = GameStats.SSRivalsSpecialBuffs[chara_id];
+                    persons[i].larc_specialBuff = round.SsRivalsSpecialBuffs[chara_id];
                     if (persons[i].larc_specialBuff == 0) //不知道是什么buff，有可能是因为小黑板是半途开启的
                         persons[i].larc_specialBuff = 11;
                     persons[i].larc_level = p.star_lv + 1;
@@ -455,12 +453,9 @@ namespace SendGameStatusPlugin
                     trainItems.Add(106, @event.data.home_info.command_info_array.Any(x => x.command_id == 605) ? @event.data.home_info.command_info_array.First(x => x.command_id == 605) : @event.data.home_info.command_info_array.First(x => x.command_id == 106));
                 }
 
-                var trainStats = new TrainStats[5];
-                var failureRate = new Dictionary<int, int>();
                 for (var t = 0; t < 5; t++)
                 {
                     var tid = GameGlobal.TrainIds[t];
-                    failureRate[tid] = trainItems[tid].failure_rate;
                     var trainParams = new Dictionary<int, int>()
                     {
                         {1,0},

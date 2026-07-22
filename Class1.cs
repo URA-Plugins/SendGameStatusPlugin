@@ -1,64 +1,23 @@
-using System.IO.Compression;
-using Newtonsoft.Json.Linq;
-using Spectre.Console;
+using Gallop;
 using UmamusumeResponseAnalyzer.Plugin;
-
-// 与共享库 EventLoggerPlugin 同组，整组共用一个 collectible ALC
-[assembly: SharedContextWith("EventLoggerPlugin")]
 
 namespace SendGameStatusPlugin;
 
 public partial class SendGameStatusPlugin : IPlugin
 {
-    public string Name => "SendGameStatusPlugin";
-    public string Author => "UmaAi Team";
-    public string[] Targets => [];
-    public string DataDirectory => Path.Combine("PluginData", Name);
-
     public void Initialize(IPluginContext context)
     {
-        GameStatusOutput.Configure(DataDirectory);
-    }
-
-    public async Task UpdatePlugin(ProgressContext ctx)
-    {
-        var progress = ctx.AddTask($"[[{Name}]] 更新");
-
-        using var client = new HttpClient();
-        using var resp = await client.GetAsync($"https://api.github.com/repos/URA-Plugins/{Name}/releases/latest");
-        var jo = JObject.Parse(await resp.Content.ReadAsStringAsync());
-
-        var isLatest = ("v" + ((IPlugin)this).Version).Equals("v" + jo["tag_name"]?.ToString());
-        if (isLatest)
-        {
-            progress.Increment(progress.MaxValue);
-            progress.StopTask();
-            return;
-        }
-        progress.Increment(25);
-
-        var downloadUrl = jo["assets"]![0]!["browser_download_url"]!.ToString();
-        using var msg = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
-        var contentLength = msg.Content.Headers.ContentLength ?? 0;
-
-        using var memoryStream = new MemoryStream();
-        await using (var stream = await msg.Content.ReadAsStreamAsync())
-        {
-            var buffer = new byte[8192];
-            int read;
-            while ((read = await stream.ReadAsync(buffer)) > 0)
-            {
-                memoryStream.Write(buffer, 0, read);
-                if (contentLength > 0)
-                    progress.Increment((double)read / contentLength * 50);
-            }
-        }
-
-        memoryStream.Position = 0;
-        using var archive = new ZipArchive(memoryStream);
-        archive.ExtractToDirectory(Path.Combine("Plugins", Name), true);
-        progress.Increment(25);
-
-        progress.StopTask();
+        GameStatusOutput.Configure(Path.Combine("PluginData", "SendGameStatusPlugin"));
+        context.Analyzers.Register<SingleModeLegendCheckEventResponse>(
+            AnalyzerKind.Response,
+            [EndpointPattern.Regex(
+                "^/umamusume/single_mode_legend/(?:change_short_cut|check_event|cm_end|continue|exec_command|finish_claw_crane|gain_skills|legend_race_continue|legend_race_end|legend_race_entry|legend_race_out|legend_race_start|popularity_end|race_end|race_entry|race_out)$")],
+            invocation => AnalyzeLegend(invocation.Payload),
+            priority: 2);
+        context.Analyzers.Register<SingleModeLegendLoadResponse>(
+            AnalyzerKind.Response,
+            [EndpointPattern.Exact("/umamusume/single_mode_legend/load")],
+            invocation => AnalyzeLegendLoad(invocation.Payload),
+            priority: 2);
     }
 }

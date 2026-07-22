@@ -36,9 +36,9 @@ namespace SendGameStatusPlugin
             };
         }
 
-        public OnsenStatus(Gallop.SingleModeOnsenCheckEventResponse @event)
+        internal OnsenStatus(Gallop.SingleModeOnsenCheckEventResponse @event, int vitalSpent)
         {
-            digVitalCost = EventLogger.vitalSpent;
+            digVitalCost = vitalSpent;
             // 是否为选择温泉状态
             if (@event.data.chara_info.playing_state == 36)
                 pendingSelection = true;
@@ -114,9 +114,10 @@ namespace SendGameStatusPlugin
 
         public GameStatusSend_Onsen(Gallop.SingleModeOnsenCheckEventResponse @event)
         {
-            baseGame = new GameStatusSend_Base<PersonBase>(@event);
+            var round = EventLogger.Current;
+            baseGame = new GameStatusSend_Base<PersonBase>(@event, round);
             baseGame.scenarioId = 12;
-            onsen = new OnsenStatus(@event);
+            onsen = new OnsenStatus(@event, round.VitalSpent);
         }
 
         public void doSend()
@@ -125,7 +126,7 @@ namespace SendGameStatusPlugin
             {
                 return;
             }
-            GameStatusOutput.WriteScenarioData(this, baseGame.turn, logSuccess: true);
+            GameStatusOutput.WriteScenarioData(this, baseGame.turn);
         }
     }
 }

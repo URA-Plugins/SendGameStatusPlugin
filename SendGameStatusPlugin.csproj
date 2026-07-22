@@ -5,7 +5,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>1.0.0</Version>
 
+    <PluginInternalName>SendGameStatusPlugin</PluginInternalName>
     <PluginDisplayName>向AI发送游戏信息</PluginDisplayName>
     <PluginAuthor>UmaAi Team</PluginAuthor>
     <PluginDescription>如果AI程序没打开就没任何作用</PluginDescription>

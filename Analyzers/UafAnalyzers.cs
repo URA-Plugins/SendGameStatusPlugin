@@ -14,7 +14,6 @@ public partial class SendGameStatusPlugin
             return ValueTask.CompletedTask;
 
         var gameStatusToSend = new GameStatusSend_UAF(response);
-        GameStatusOutput.LogInfo("AI所需信息已生成...");
         GameStatusOutput.WriteScenarioData(gameStatusToSend, gameStatusToSend.turn);
         return ValueTask.CompletedTask;
     }
@@ -27,7 +26,6 @@ public partial class SendGameStatusPlugin
             return ValueTask.CompletedTask;
 
         var gameStatusToSend = new GameStatusSend_UAF(response);
-        GameStatusOutput.LogInfo("AI所需信息已生成...");
         GameStatusOutput.WriteScenarioData(gameStatusToSend, gameStatusToSend.turn);
         return ValueTask.CompletedTask;
     }

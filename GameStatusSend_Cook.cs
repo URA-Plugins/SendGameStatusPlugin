@@ -1,6 +1,4 @@
 ﻿using EventLoggerPlugin;
-using SendGameStatusPlugin;
-using Spectre.Console;
 
 namespace SendGameStatusPlugin
 {
@@ -15,14 +13,6 @@ namespace SendGameStatusPlugin
         public bool isHint;//是否有hint。友人卡或者npc恒为false
         public int cardRecord;//记录一些可能随着时间而改变的参数，例如根涡轮的固有
 
-        public CookPerson()
-        {
-            personType = 0;
-            charaId = 0;
-            friendship = 0;
-            isHint = false;
-            cardRecord = 0;
-        }
     }
     public class GameStatusSend_Cook
     {
@@ -106,6 +96,7 @@ namespace SendGameStatusPlugin
 
         public GameStatusSend_Cook(Gallop.SingleModeCookCheckEventResponse @event)
         {
+            var round = EventLogger.Current;
             islegal = false;
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
             if ((@event.data.chara_info.playing_state != 1))
@@ -122,7 +113,6 @@ namespace SendGameStatusPlugin
             }
 
             islegal = true;
-            //Console.WriteLine("测试用，看到这个说明发送成功\n");
             umaId = @event.data.chara_info.card_id;
             umaStar = @event.data.chara_info.rarity;
             //turn
@@ -202,18 +192,18 @@ namespace SendGameStatusPlugin
 
             for (int t = @event.data.chara_info.turn - 1; t >= 1; t--)
             {
-                if (GameStats.stats[t] == null)
+                if (round.Turns[t] is not { } stats)
                 {
                     break;
                 }
 
-                if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                if (!GameGlobal.TrainIds.Any(x => x == stats.PlayerChoice)) //没训练
                     continue;
-                if (GameStats.stats[t].isTrainingFailed)//训练失败
+                if (stats.IsTrainingFailed)//训练失败
                     continue;
                 if ((t >= 37 && t <= 40) || (t >= 61 && t <= 64)) //合宿点的次数不算
                     continue;
-                int trainIdx = GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice];
+                int trainIdx = GameGlobal.ToTrainIndex[stats.PlayerChoice];
                 trainClickCount[trainIdx] += 1;
             }
 
@@ -276,10 +266,8 @@ namespace SendGameStatusPlugin
 
             foreach (var train in @event.data.home_info.command_info_array)
             {
-                //Console.WriteLine(train.command_id);
                 if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
                     continue;
-                //Console.WriteLine("!");
                 int trainId = GameGlobal.ToTrainIndex[train.command_id];
 
                 int j = 0;
@@ -300,7 +288,6 @@ namespace SendGameStatusPlugin
             {
                 bool istrainlocked = false;
                 int enableidx = -1;
-                var command = @event.data.home_info.command_info_array;
                 foreach (var train in @event.data.home_info.command_info_array)
                 {
                     if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
@@ -404,16 +391,16 @@ namespace SendGameStatusPlugin
                     bool friendClicked = false;//友人卡是否点过第一次
                     for (int t = @event.data.chara_info.turn - 1; t >= 1; t--)
                     {
-                        if (GameStats.stats[t] == null)
+                        if (round.Turns[t] is not { } stats)
                         {
                             break;
                         }
 
-                        if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Any(x => x == stats.PlayerChoice)) //没训练
                             continue;
-                        if (GameStats.stats[t].isTrainingFailed)//训练失败
+                        if (stats.IsTrainingFailed)//训练失败
                             continue;
-                        if (!GameStats.stats[t].cook_friendAtTrain[GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice]])
+                        if (!stats.CookFriendAtTrain[GameGlobal.ToTrainIndex[stats.PlayerChoice]])
                             continue;//没点友人
 
                         friendClicked = true;

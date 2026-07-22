@@ -1,6 +1,5 @@
 ﻿using EventLoggerPlugin;
 using Gallop;
-using Newtonsoft.Json;
 using UmamusumeResponseAnalyzer;
 using GameGlobal = SendGameStatusPlugin.GameGlobal;
 
@@ -8,15 +7,9 @@ namespace SendGameStatusPlugin
 {
     public class ScenarioBuffInfo_Legend
     {
-        public int buffId;
+        public int buffId = -1;
         public bool isActive;
         public int coolTime;
-        public ScenarioBuffInfo_Legend()
-        {
-            buffId = -1;
-            isActive = false;
-            coolTime = 0;
-        }
     }
     public class GameStatusSend_Legend
     {
@@ -118,6 +111,7 @@ namespace SendGameStatusPlugin
 
         public GameStatusSend_Legend(Gallop.SingleModeLegendCheckEventResponse @event)
         {
+            var round = EventLogger.Current;
             islegal = true;
             scenarioId = 10;
             protocolVersion = "250405";
@@ -149,7 +143,6 @@ namespace SendGameStatusPlugin
             }
 
             islegal = true;
-            //Console.WriteLine("测试用，看到这个说明发送成功\n");
             umaId = @event.data.chara_info.card_id;
             umaStar = @event.data.chara_info.rarity;
             //turn
@@ -208,7 +201,7 @@ namespace SendGameStatusPlugin
                 var continuousTurnNum = 0;
                 for (var i = turn; i >= 1; i--)
                 {
-                    if (GameStats.stats[i] == null || !GameStats.stats[i].legend_isEffect104)
+                    if (round.Turns[i] is not { LegendIsEffect104: true })
                         break;
                     continuousTurnNum++;
                 }
@@ -243,10 +236,9 @@ namespace SendGameStatusPlugin
             trainLevelCount = new int[5];
 
             var trainLevelClickNumEvery = 4;
-            var turnStat = GameStats.stats[@event.data.chara_info.turn];
+            var turnStat = round.Turns[@event.data.chara_info.turn];
             if (turnStat == null)
             {
-                GameStatusOutput.LogWarning("获取训练等级信息出错");
                 for (var i = 0; i < 5; i++)
                 {
                     var trId = @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
@@ -259,7 +251,7 @@ namespace SendGameStatusPlugin
             else
             {
                 for (var i = 0; i < 5; i++)
-                    trainLevelCount[i] = turnStat.trainLevelCount[i] + trainLevelClickNumEvery * (turnStat.trainLevel[i] - 1);
+                    trainLevelCount[i] = turnStat.TrainLevelCount[i] + trainLevelClickNumEvery * (turnStat.TrainLevel[i] - 1);
             }
 
             //从游戏json的id到ai的人头编号的换算
@@ -335,7 +327,7 @@ namespace SendGameStatusPlugin
                 foreach (var p in train.training_partner_array)
                 {
                     var personIdUmaAi = p == 102 ? 6 : p == 103 ? 7 : p >= 1000 ?
-                        GameGlobal.ToTrainIndex[Database.Names.GetRSupportCardTypeByCharaId(p)] + 10 //npc
+                        GameGlobal.ToTrainIndex[Database.Names.GetRequiredRSupportCardTypeByCharaId(p)] + 10 //npc
                         : p - 1; //支援卡
                     personDistribution[trainId, j] = personIdUmaAi;
                     j += 1;
@@ -395,16 +387,16 @@ namespace SendGameStatusPlugin
                     var friendClicked = false;//友人卡是否点过第一次
                     for (var t = @event.data.chara_info.turn - 1; t >= 1; t--)
                     {
-                        if (GameStats.stats[t] == null)
+                        if (round.Turns[t] is not { } stats)
                         {
                             break;
                         }
 
-                        if (!GameGlobal.TrainIds.Contains(GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Contains(stats.PlayerChoice)) //没训练
                             continue;
-                        if (GameStats.stats[t].isTrainingFailed)//训练失败
+                        if (stats.IsTrainingFailed)//训练失败
                             continue;
-                        if (!GameStats.stats[t].legend_friendAtTrain[GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice]])
+                        if (!stats.LegendFriendAtTrain[GameGlobal.ToTrainIndex[stats.PlayerChoice]])
                             continue;//没点友人
 
                         friendClicked = true;
@@ -415,7 +407,6 @@ namespace SendGameStatusPlugin
                 }
 
             }
-            if (!islegal) return;
             var lg = @event.data.legend_data_set;
 
 
@@ -504,7 +495,7 @@ namespace SendGameStatusPlugin
                     {
                         if (f.training_partner_id > 1000)
                         {
-                            var c = Database.Names.GetRSupportCardTypeByCharaId(f.training_partner_id);
+                            var c = Database.Names.GetRequiredRSupportCardTypeByCharaId(f.training_partner_id);
                             c = c < 0 ? -1 : GameGlobal.ToTrainIndex[c];//未知是-1
 
                             npcIdToTrain.Add(f.training_partner_id, c);
@@ -518,8 +509,6 @@ namespace SendGameStatusPlugin
                     var unknownCount = npcIdToTrain.Count(x => x.Value < 0);
                     if (unknownCount > 0)
                     {
-                        var unknownIds = string.Join(", ", npcIdToTrain.Where(x => x.Value < 0).Select(x => x.Key));
-                        GameStatusOutput.LogError($"NPC(id={unknownIds})无法获取属性，无法运行ai，请及时更新数据");
                         islegal = false;
                         return;
                     }

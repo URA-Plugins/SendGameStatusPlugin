@@ -1,7 +1,4 @@
 ﻿using EventLoggerPlugin;
-using Newtonsoft.Json;
-using System.Text.RegularExpressions;
-using System.Text.Json;
 using UmamusumeResponseAnalyzer;
 using UmamusumeResponseAnalyzer.Entities;
 
@@ -89,15 +86,24 @@ namespace SendGameStatusPlugin
             return this.playing_state != 1;
         }
 
-        public GameStatusSend_Base(Gallop.SingleModeMechaCheckEventResponse @event) : this(CheckEventContext.From(@event))
+        public GameStatusSend_Base(Gallop.SingleModeMechaCheckEventResponse @event)
+            : this(CheckEventContext.From(@event), EventLogger.Current)
         {
         }
 
-        public GameStatusSend_Base(Gallop.SingleModeOnsenCheckEventResponse @event) : this(CheckEventContext.From(@event))
+        public GameStatusSend_Base(Gallop.SingleModeOnsenCheckEventResponse @event)
+            : this(CheckEventContext.From(@event), EventLogger.Current)
         {
         }
 
-        private GameStatusSend_Base(CheckEventContext @event)
+        internal GameStatusSend_Base(
+            Gallop.SingleModeOnsenCheckEventResponse @event,
+            EventLoggerRoundSnapshot round)
+            : this(CheckEventContext.From(@event), round)
+        {
+        }
+
+        private GameStatusSend_Base(CheckEventContext @event, EventLoggerRoundSnapshot round)
         {
             islegal = false;
             playing_state = @event.data.chara_info.playing_state;
@@ -113,7 +119,6 @@ namespace SendGameStatusPlugin
             else
             {
                 //重复显示的回合直接return，就不发了
-                GameStatusOutput.LogInfo($"当前回合状态: {playing_state}");
                 return;
             }
 
@@ -125,7 +130,6 @@ namespace SendGameStatusPlugin
             }
 
             islegal = true;
-            //Console.WriteLine("测试用，看到这个说明发送成功\n");
             umaId = @event.data.chara_info.card_id;
             umaStar = @event.data.chara_info.rarity;
             //turn
@@ -136,19 +140,11 @@ namespace SendGameStatusPlugin
             motivation = @event.data.chara_info.motivation;
             // raceHistory
             var history = new List<int>();
-            if (EventLogger.raceHistory != null)
+            foreach (var t in round.RaceHistory)
             {
-                foreach (var t in EventLogger.raceHistory)
-                {
-                    history.Add(t - 1);
-                }
+                history.Add(t - 1);
             }
             raceHistory = history.ToArray();
-            // 检测是否抓取了比赛信息
-            if (turn > 12 && raceHistory.Length == 0)
-            {
-                GameStatusOutput.LogWarning("警告: 未获得胜场信息，AI无法准确计算自选比赛；请重新进入育成, 或者比赛后刷新");
-            }
 
             fiveStatus = new int[]
             {
@@ -224,10 +220,9 @@ namespace SendGameStatusPlugin
             trainLevelCount = new int[5] { 0, 0, 0, 0, 0 };
 
             var trainLevelClickNumEvery = 4;
-            var turnStat = GameStats.stats[@event.data.chara_info.turn];
+            var turnStat = round.Turns[@event.data.chara_info.turn];
             if (turnStat == null)
             {
-                GameStatusOutput.LogWarning("获取训练等级信息出错");
                 for (var i = 0; i < 5; i++)
                 {
                     var trId = @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha ? GameGlobal.TrainIdsMecha[i] :
@@ -240,7 +235,7 @@ namespace SendGameStatusPlugin
             else
             {
                 for (var i = 0; i < 5; i++)
-                    trainLevelCount[i] = turnStat.trainLevelCount[i] + trainLevelClickNumEvery * (turnStat.trainLevel[i] - 1);
+                    trainLevelCount[i] = turnStat.TrainLevelCount[i] + trainLevelClickNumEvery * (turnStat.TrainLevel[i] - 1);
             }
 
             //从游戏json的id到ai的人头编号的换算
@@ -311,10 +306,8 @@ namespace SendGameStatusPlugin
 
             foreach (var train in @event.data.home_info.command_info_array)
             {
-                //Console.WriteLine(train.command_id);
                 if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
                     continue;
-                //Console.WriteLine("!");
                 var trainId = GameGlobal.ToTrainIndex[train.command_id];
 
                 var j = 0;
@@ -335,7 +328,6 @@ namespace SendGameStatusPlugin
             {
                 var istrainlocked = false;
                 var enableidx = -1;
-                var command = @event.data.home_info.command_info_array;
                 foreach (var train in @event.data.home_info.command_info_array)
                 {
                     if (!GameGlobal.ToTrainIndex.ContainsKey(train.command_id))//不是正常训练
@@ -373,16 +365,16 @@ namespace SendGameStatusPlugin
                     var friendClicked = false;//友人卡是否点过第一次
                     for (var t = @event.data.chara_info.turn - 1; t >= 1; t--)
                     {
-                        if (GameStats.stats[t] == null)
+                        if (round.Turns[t] is not { } stats)
                         {
                             break;
                         }
 
-                        if (!GameGlobal.TrainIds.Any(x => x == GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Any(x => x == stats.PlayerChoice)) //没训练
                             continue;
-                        if (GameStats.stats[t].isTrainingFailed)//训练失败
+                        if (stats.IsTrainingFailed)//训练失败
                             continue;
-                        if (!GameStats.stats[t].cook_friendAtTrain[GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice]])
+                        if (!stats.CookFriendAtTrain[GameGlobal.ToTrainIndex[stats.PlayerChoice]])
                             continue;//没点友人
 
                         friendClicked = true;

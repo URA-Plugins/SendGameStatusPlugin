@@ -91,6 +91,7 @@ namespace SendGameStatusPlugin
 
         public GameStatusSend_UAF(Gallop.SingleModeSportCheckEventResponse @event)
         {
+            var round = EventLogger.Current;
 
             if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0) || @event.data.race_start_info != null) return;
             bool uaf_liferace = true;
@@ -411,14 +412,14 @@ namespace SendGameStatusPlugin
                     bool lianghuaClicked = false;//友人卡是否点过第一次
                     for (int t = @event.data.chara_info.turn - 1; t >= 1; t--)
                     {
-                        if (GameStats.stats[t] == null)
+                        if (round.Turns[t] is not { } stats)
                             break;
 
-                        if (!GameGlobal.TrainIds.Contains(GameStats.stats[t].playerChoice)) //没训练
+                        if (!GameGlobal.TrainIds.Contains(stats.PlayerChoice)) //没训练
                             continue;
-                        if (GameStats.stats[t].isTrainingFailed)//训练失败
+                        if (stats.IsTrainingFailed)//训练失败
                             continue;
-                        if (!GameStats.stats[t].uaf_friendAtTrain[GameGlobal.ToTrainIndex[GameStats.stats[t].playerChoice]])
+                        if (!stats.UafFriendAtTrain[GameGlobal.ToTrainIndex[stats.PlayerChoice]])
                             continue;//没点友人
 
                         lianghuaClicked = true;

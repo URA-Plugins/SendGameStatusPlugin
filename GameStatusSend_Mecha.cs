@@ -72,7 +72,6 @@
                 0; //未知
             if (stage == 0)
             {
-                islegal = false;
                 throw new Exception($"GameStatusSend_Mecha playing_state={@event.data.chara_info.playing_state}");
             }
             gameStage = stage;

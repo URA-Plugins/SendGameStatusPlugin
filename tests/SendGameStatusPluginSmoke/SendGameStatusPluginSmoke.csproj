@@ -15,7 +15,7 @@
     <Compile Include="..\..\deps\UmamusumeResponseAnalyzer\eng\PluginTesting\SmokeHost.cs" Link="WorkspaceSmokeSession.cs" />
     <ProjectReference
       Include="..\..\SendGameStatusPlugin.csproj"
-      AdditionalProperties="GenerateUraPluginManifestOnBuild=false;PackageUraPluginOnBuild=false;DeployUraPluginToLocalAppDataOnBuild=false" />
+      AdditionalProperties="GenerateUraPluginManifestOnBuild=false;PackageUraPluginOnBuild=false;DeployUraPluginToLocalAppDataOnBuild=false;BuildInParallel=false;UseSharedCompilation=false" />
   </ItemGroup>
 
 </Project>

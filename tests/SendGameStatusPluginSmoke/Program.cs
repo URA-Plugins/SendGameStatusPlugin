@@ -256,8 +256,7 @@ static void AssertProgrammaticLegendRegistrations(SmokeAnalyzerRegistry registry
 
 static void AssertAnalyzersAreSplitIntoFolder()
 {
-    var repoRoot = FindRepositoryRoot();
-    var pluginRoot = Path.Combine(repoRoot, "SendGameStatusPlugin");
+    var pluginRoot = FindRepositoryRoot();
     var classSource = File.ReadAllText(Path.Combine(pluginRoot, "Class1.cs"));
     if (classSource.Contains("[ResponseAnalyzer", StringComparison.Ordinal))
         throw new InvalidOperationException("SendGameStatusPlugin Class1.cs must not contain analyzer registrations.");
@@ -282,11 +281,10 @@ static void AssertAnalyzersAreSplitIntoFolder()
 
 static void AssertAnalyzerPathDoesNotWriteRawAnsiConsole()
 {
-    var repoRoot = FindRepositoryRoot();
-    var pluginRoot = Path.Combine(repoRoot, "SendGameStatusPlugin");
+    var pluginRoot = FindRepositoryRoot();
     var sourceFiles = Directory
         .EnumerateFiles(pluginRoot, "*.cs", SearchOption.AllDirectories)
-        .Where(path => !IsBuildArtifactPath(pluginRoot, path))
+        .Where(path => !IsExcludedSourcePath(pluginRoot, path))
         .Where(path => !string.Equals(Path.GetFileName(path), "Class1.cs", StringComparison.Ordinal))
         .ToArray();
 
@@ -305,11 +303,10 @@ static void AssertAnalyzerPathDoesNotWriteRawAnsiConsole()
 
 static void AssertAnalyzerPathDoesNotUseConsoleInteractionOutput()
 {
-    var repoRoot = FindRepositoryRoot();
-    var pluginRoot = Path.Combine(repoRoot, "SendGameStatusPlugin");
+    var pluginRoot = FindRepositoryRoot();
     var sourceFiles = Directory
         .EnumerateFiles(pluginRoot, "*.cs", SearchOption.AllDirectories)
-        .Where(path => !IsBuildArtifactPath(pluginRoot, path))
+        .Where(path => !IsExcludedSourcePath(pluginRoot, path))
         .Where(path => !string.Equals(Path.GetFileName(path), "Class1.cs", StringComparison.Ordinal))
         .ToArray();
 
@@ -340,11 +337,10 @@ static void AssertAnalyzerPathDoesNotUseConsoleInteractionOutput()
 
 static void AssertGameStatusOutputTargetsPluginScenarioDirectories()
 {
-    var repoRoot = FindRepositoryRoot();
-    var pluginRoot = Path.Combine(repoRoot, "SendGameStatusPlugin");
+    var pluginRoot = FindRepositoryRoot();
     var sourceFiles = Directory
         .EnumerateFiles(pluginRoot, "*.cs", SearchOption.AllDirectories)
-        .Where(path => !IsBuildArtifactPath(pluginRoot, path))
+        .Where(path => !IsExcludedSourcePath(pluginRoot, path))
         .ToArray();
 
     foreach (var sourceFile in sourceFiles)
@@ -360,18 +356,18 @@ static void AssertGameStatusOutputTargetsPluginScenarioDirectories()
 
 }
 
-static bool IsBuildArtifactPath(string root, string path)
+static bool IsExcludedSourcePath(string root, string path)
 {
     var relative = Path.GetRelativePath(root, path);
     return relative
         .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        .Any(segment => segment is "bin" or "obj" or "bin-test" or "obj-test");
+        .Any(segment => segment is "bin" or "obj" or "bin-test" or "obj-test" or "deps" or "tests");
 }
 
 static void AssertProjectFileUsesRootBuildConvention()
 {
     var repoRoot = FindRepositoryRoot();
-    var projectPath = Path.Combine(repoRoot, "SendGameStatusPlugin", "SendGameStatusPlugin.csproj");
+    var projectPath = Path.Combine(repoRoot, "SendGameStatusPlugin.csproj");
     var document = XDocument.Load(projectPath);
 
     var isUraPlugin = document.Descendants("IsUraPlugin").SingleOrDefault()?.Value;
@@ -398,7 +394,7 @@ static void AssertProjectFileUsesRootBuildConvention()
     if (forbiddenProjects.Length != 0)
         throw new InvalidOperationException($"SendGameStatusPlugin.csproj has forbidden project references: {string.Join(", ", forbiddenProjects)}.");
 
-    var legacyManifestPath = Path.Combine(repoRoot, "SendGameStatusPlugin", "manifest.json");
+    var legacyManifestPath = Path.Combine(repoRoot, "manifest.json");
     if (File.Exists(legacyManifestPath))
         throw new InvalidOperationException("SendGameStatusPlugin must not rely on a source manifest.json.");
 }
@@ -411,15 +407,14 @@ static string FindRepositoryRoot()
              directory is not null;
              directory = directory.Parent)
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, "SendGameStatusPlugin")) &&
-                Directory.Exists(Path.Combine(directory.FullName, "tests")))
+            if (File.Exists(Path.Combine(directory.FullName, "SendGameStatusPlugin.csproj")))
             {
                 return directory.FullName;
             }
         }
     }
 
-    throw new InvalidOperationException("Cannot locate URA-Plugins repository root.");
+    throw new InvalidOperationException("Cannot locate SendGameStatusPlugin repository root.");
 }
 
 sealed class SmokePluginContext(IApplication application) : IPluginContext

@@ -1,0 +1,6 @@
+[submodule "UmamusumeResponseAnalyzer"]
+	path = deps/UmamusumeResponseAnalyzer
+	url = https://github.com/EtherealAO/UmamusumeResponseAnalyzer
+[submodule "EventLoggerPlugin"]
+	path = deps/EventLoggerPlugin
+	url = https://github.com/URA-Plugins/EventLoggerPlugin.git

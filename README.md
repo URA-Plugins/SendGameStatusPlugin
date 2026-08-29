@@ -12,8 +12,10 @@ JSON 写入 `PluginData/SendGameStatusPlugin/<状态类型>/`：`thisTurn.json` 
 
 ## 构建
 
-需要 .NET 10 SDK，并保持本仓库与 `EventLoggerPlugin` 处于同一父目录。在仓库根目录运行：
+仓库通过 Git submodule 固定 Host 与 EventLoggerPlugin 源码。克隆后在仓库根执行：
 
 ```powershell
-dotnet build SendGameStatusPlugin.csproj -p:GenerateUraPluginManifestOnBuild=false -p:PackageUraPluginOnBuild=false -p:DeployUraPluginToLocalAppDataOnBuild=false
+git -c core.longpaths=true submodule update --init --recursive
+dotnet build .\SendGameStatusPlugin.csproj -c Release -m:1 -p:RuntimeIdentifier=win-x64 -p:SelfContained=false -p:PlatformTarget=AnyCPU -p:DeployUraPluginToLocalAppDataOnBuild=false
+dotnet run --project .\tests\SendGameStatusPluginSmoke\SendGameStatusPluginSmoke.csproj -c Release -p:GenerateUraPluginManifestOnBuild=false -p:PackageUraPluginOnBuild=false -p:DeployUraPluginToLocalAppDataOnBuild=false
 ```

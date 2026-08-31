@@ -5,8 +5,6 @@ VisualStudioVersion = 17.14.36212.18
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SendGameStatusPlugin", "SendGameStatusPlugin.csproj", "{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventLoggerPlugin", "deps\EventLoggerPlugin\EventLoggerPlugin.csproj", "{16AD65E1-CF72-765E-BAAA-7EB7B684F577}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -17,10 +15,6 @@ Global
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6BC7C25B-9E64-B247-5063-FB40A7EDEC39}.Release|Any CPU.Build.0 = Release|Any CPU
-		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{16AD65E1-CF72-765E-BAAA-7EB7B684F577}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

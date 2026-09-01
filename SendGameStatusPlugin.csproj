@@ -16,8 +16,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="deps\EventLoggerPlugin\EventLoggerPlugin.csproj"
-                      AdditionalProperties="UraHostProjectPath=$(UraHostProjectPath)">
+    <ProjectReference Include="deps\EventLoggerPlugin\EventLoggerPlugin.csproj">
       <Private>False</Private>
     </ProjectReference>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
@@ -55,4 +54,8 @@
       <Generator>PublicResXFileCodeGenerator</Generator>
     </EmbeddedResource>
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="UmamusumeResponseAnalyzer" Version="2026.9.1" />
+  </ItemGroup>
+
 </Project>

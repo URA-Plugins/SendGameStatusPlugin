@@ -14,6 +14,8 @@ internal sealed class CheckEventContext
     public static CheckEventContext From(SingleModeMechaCheckEventResponse response) => new(new(response.data));
 
     public static CheckEventContext From(SingleModeOnsenCheckEventResponse response) => new(new(response.data));
+
+    public static CheckEventContext From(SingleModeRamenCheckEventResponse response) => new(new(response.data));
 }
 
 internal sealed class CheckEventData
@@ -32,6 +34,14 @@ internal sealed class CheckEventData
     }
 
     public CheckEventData(SingleModeOnsenCheckEventResponse.CommonResponse data)
+    {
+        chara_info = data.chara_info;
+        home_info = data.home_info;
+        unchecked_event_array = data.unchecked_event_array;
+        race_start_info = data.race_start_info;
+    }
+
+    public CheckEventData(SingleModeRamenCheckEventResponse.CommonResponse data)
     {
         chara_info = data.chara_info;
         home_info = data.home_info;

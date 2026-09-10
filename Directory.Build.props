@@ -1,3 +1,0 @@
-<Project>
-  <Import Project="$(MSBuildThisFileDirectory)deps\UmamusumeResponseAnalyzer\eng\URA.Plugin.Build.props" />
-</Project>

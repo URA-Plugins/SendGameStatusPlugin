@@ -15,13 +15,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\deps\UmamusumeResponseAnalyzer\eng\PluginTesting\SmokeHost.cs" Link="WorkspaceSmokeSession.cs" />
+    <Compile Include="$(UraTestHostRoot)\eng\PluginTesting\SmokeHost.cs" Link="WorkspaceSmokeSession.cs" />
     <ProjectReference
-      Include="$(UraHostProjectPath)"
+      Include="$(UraTestHostRoot)\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj"
       AdditionalProperties="$(_SmokeProjectReferenceProperties)" />
     <ProjectReference
       Include="..\..\deps\EventLoggerPlugin\EventLoggerPlugin.csproj"
-      AdditionalProperties="UraHostProjectPath=$(UraHostProjectPath);$(_SmokeProjectReferenceProperties)" />
+      AdditionalProperties="$(_SmokeProjectReferenceProperties)" />
     <ProjectReference
       Include="..\..\SendGameStatusPlugin.csproj"
       AdditionalProperties="$(_SmokeProjectReferenceProperties)" />

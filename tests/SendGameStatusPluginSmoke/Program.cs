@@ -15,7 +15,7 @@ AssertAnalyzersAreSplitIntoFolder();
 AssertAnalyzerPathDoesNotWriteRawAnsiConsole();
 AssertAnalyzerPathDoesNotUseConsoleInteractionOutput();
 AssertGameStatusOutputTargetsPluginScenarioDirectories();
-AssertProjectFileUsesRootBuildConvention();
+AssertProjectFileUsesHostPackage();
 
 Console.WriteLine("PASS SendGameStatusPlugin smoke");
 
@@ -364,7 +364,7 @@ static bool IsExcludedSourcePath(string root, string path)
         .Any(segment => segment is "bin" or "obj" or "bin-test" or "obj-test" or "deps" or "tests");
 }
 
-static void AssertProjectFileUsesRootBuildConvention()
+static void AssertProjectFileUsesHostPackage()
 {
     var repoRoot = FindRepositoryRoot();
     var projectPath = Path.Combine(repoRoot, "SendGameStatusPlugin.csproj");
@@ -375,6 +375,12 @@ static void AssertProjectFileUsesRootBuildConvention()
         throw new InvalidOperationException("SendGameStatusPlugin.csproj must set IsUraPlugin=true.");
     if (document.Descendants("PluginDependencies").SingleOrDefault()?.Value != "EventLoggerPlugin")
         throw new InvalidOperationException("SendGameStatusPlugin.csproj must declare EventLoggerPlugin as a plugin dependency.");
+
+    var hostReferences = document.Descendants("PackageReference").Where(x =>
+        x.Attribute("Include")?.Value == "UmamusumeResponseAnalyzer" &&
+        x.Attribute("Version")?.Value == "*").ToArray();
+    if (hostReferences.Length != 1)
+        throw new InvalidOperationException("SendGameStatusPlugin.csproj must reference UmamusumeResponseAnalyzer * exactly once.");
 
     var forbiddenPackages = document
         .Descendants("PackageReference")
@@ -400,22 +406,8 @@ static void AssertProjectFileUsesRootBuildConvention()
 }
 
 static string FindRepositoryRoot()
-{
-    foreach (var startPath in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
-    {
-        for (var directory = new DirectoryInfo(startPath);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "SendGameStatusPlugin.csproj")))
-            {
-                return directory.FullName;
-            }
-        }
-    }
-
-    throw new InvalidOperationException("Cannot locate SendGameStatusPlugin repository root.");
-}
+    => Environment.GetEnvironmentVariable("URA_TEST_PLUGIN_ROOT")
+       ?? throw new InvalidOperationException("URA_TEST_PLUGIN_ROOT must identify the plugin checkout.");
 
 sealed class SmokePluginContext(IApplication application) : IPluginContext
 {

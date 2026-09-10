@@ -1,7 +1,10 @@
+using System.Reflection;
 using System.Xml.Linq;
 using Gallop;
 using Gallop.Endpoints;
 using MessagePack;
+using Newtonsoft.Json.Linq;
+using RamenScenarioAnalyzer;
 using SendGameStatusPlugin;
 using Terminal.Gui.App;
 using UmamusumeResponseAnalyzer.TerminalGui;
@@ -14,7 +17,7 @@ AssertWorkspaceLifecycle(ui);
 AssertAnalyzersAreSplitIntoFolder();
 AssertAnalyzerPathDoesNotWriteRawAnsiConsole();
 AssertAnalyzerPathDoesNotUseConsoleInteractionOutput();
-AssertGameStatusOutputTargetsPluginScenarioDirectories();
+AssertGameStatusOutputTargetsPluginDirectory();
 AssertProjectFileUsesHostPackage();
 
 Console.WriteLine("PASS SendGameStatusPlugin smoke");
@@ -34,7 +37,7 @@ static void AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
         plugin.Initialize(context);
         try
         {
-            AssertProgrammaticLegendRegistrations(context.Analyzers);
+            AssertProgrammaticRegistrations(context.Analyzers);
             AssertExactAnalyzerDispatch(plugin);
             if (!ReferenceEquals(Workspace.Current, ui.Bootstrap)
                 || !string.Equals(baseline, ui.CaptureScreen(), StringComparison.Ordinal))
@@ -46,13 +49,13 @@ static void AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
             var outputDirectory = Path.Combine(
                 tempDirectory,
                 "PluginData",
-                "SendGameStatusPlugin",
-                nameof(GameStatusSend_Onsen));
+                "SendGameStatusPlugin");
             if (!File.Exists(Path.Combine(outputDirectory, "thisTurn.json"))
-                || !File.Exists(Path.Combine(outputDirectory, "turn7.json")))
+                || !File.Exists(Path.Combine(outputDirectory, "game0_turn7.json")))
             {
                 throw new InvalidOperationException("A real scenario write did not produce both status files.");
             }
+            AssertRamenDispatch(context, outputDirectory);
             if (!ReferenceEquals(Workspace.Current, ui.Bootstrap)
                 || !string.Equals(baseline, ui.CaptureScreen(), StringComparison.Ordinal))
             {
@@ -76,6 +79,110 @@ static void AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
     {
         Directory.SetCurrentDirectory(originalDirectory);
         Directory.Delete(tempDirectory, recursive: true);
+    }
+}
+
+static void AssertRamenDispatch(SmokePluginContext context, string outputDirectory)
+{
+    var common = CreateWritableOnsenResponse().data;
+    common.chara_info.single_mode_chara_id = 222;
+    common.chara_info.scenario_id = 14;
+    common.chara_info.turn = 1;
+    var command = new SingleModeRamenExecCommandResponse
+    {
+        data = new()
+        {
+            chara_info = common.chara_info,
+            home_info = common.home_info,
+            unchecked_event_array = [],
+            ramen_data_set = new()
+        }
+    };
+    var load = new SingleModeRamenLoadResponse
+    {
+        data = new()
+        {
+            single_mode_load_common = new()
+            {
+                chara_info = common.chara_info,
+                home_info = common.home_info,
+                unchecked_event_array = []
+            },
+            ramen_data_set = new()
+        }
+    };
+    var checkEvent = new SingleModeRamenCheckEventResponse
+    {
+        data = new()
+        {
+            chara_info = common.chara_info,
+            home_info = common.home_info,
+            unchecked_event_array = [],
+            ramen_data_set = new()
+        }
+    };
+    var count = 0;
+    foreach (var (path, response, state, source) in new (string, object, int, string?)[]
+    {
+        ("load", load, 1, "load"),
+        ("exec_command", command, 1, "command"),
+        ("exec_command", command, 2, null),
+        ("exec_command", command, 10, "special"),
+        ("check_event", checkEvent, 1, "command"),
+        ("check_event", checkEvent, 2, null),
+        ("check_event", checkEvent, 10, "command"),
+        ("change_short_cut", new SingleModeRamenChangeShortCutResponse
+        {
+            data = new() { chara_info = common.chara_info, unchecked_event_array = [], ramen_data_set = new() }
+        }, 1, null),
+        ("finish_claw_crane", new SingleModeRamenFinishClawCraneResponse
+        {
+            data = new() { chara_info = common.chara_info, unchecked_event_array = [], ramen_data_set = new() }
+        }, 1, null)
+    })
+    {
+        common.chara_info.playing_state = state;
+        context.Analyzers.Dispatch($"/umamusume/single_mode_ramen/{path}", response);
+        if (source is not null)
+        {
+            count++;
+            var currentJson = File.ReadAllText(Path.Combine(outputDirectory, "thisTurn.json"));
+            var current = JObject.Parse(currentJson);
+            if ((string?)current["baseGame"]?["source"] != source
+                || (int?)current["baseGame"]?["scenarioId"] != 14
+                || (int?)current["ramen"]?["last_ramen"] != -1)
+                throw new InvalidOperationException($"Ramen {path}/{state} did not preserve its source or default state.");
+
+            var fileName = count == 1 ? "game222_turn0.json" : $"game222_turn0_{count}.json";
+            if (File.ReadAllText(Path.Combine(outputDirectory, fileName)) != currentJson)
+                throw new InvalidOperationException($"Ramen {path}/{state} did not write the current numbered snapshot.");
+        }
+        if (Directory.GetFiles(outputDirectory, "game222_turn0*.json").Length != count)
+            throw new InvalidOperationException($"Ramen {path}/{state} wrote an unexpected snapshot.");
+    }
+
+    context.RamenAvailable = true;
+    common.chara_info.playing_state = 1;
+    try
+    {
+        foreach (var (regionId, expected) in new (int?, int)[] { (null, -1), (1, 0), (4, 3) })
+        {
+            RamenScenarioState.UpdateLoad(222, new()
+            {
+                selected_region_id_array = [1, 2, 3],
+                reduce_base_turn_info_array = [],
+                last_tasting_info = regionId is { } id ? new() { region_id = id } : null
+            });
+            context.Analyzers.Dispatch("/umamusume/single_mode_ramen/exec_command", command);
+            var current = JObject.Parse(File.ReadAllText(Path.Combine(outputDirectory, "thisTurn.json")));
+            if ((int?)current["ramen"]?["last_ramen"] != expected)
+                throw new InvalidOperationException($"Ramen tasting region {regionId} must export {expected}.");
+        }
+    }
+    finally
+    {
+        RamenScenarioState.Clear();
+        context.RamenAvailable = false;
     }
 }
 
@@ -219,7 +326,7 @@ static SingleModeOnsenCheckEventResponse CreateWritableOnsenResponse()
     };
 }
 
-static void AssertProgrammaticLegendRegistrations(SmokeAnalyzerRegistry registry)
+static void AssertProgrammaticRegistrations(SmokeAnalyzerRegistry registry)
 {
     var expected = new[]
     {
@@ -231,11 +338,23 @@ static void AssertProgrammaticLegendRegistrations(SmokeAnalyzerRegistry registry
             typeof(SingleModeLegendLoadResponse),
             EndpointPatternKind.Exact,
             "/umamusume/single_mode_legend/load"),
+        new AnalyzerRegistrationExpectation(
+            typeof(SingleModeRamenLoadResponse),
+            EndpointPatternKind.Exact,
+            "/umamusume/single_mode_ramen/load"),
+        new AnalyzerRegistrationExpectation(
+            typeof(SingleModeRamenExecCommandResponse),
+            EndpointPatternKind.Regex,
+            "^/umamusume/single_mode_ramen/(?:change_short_cut|exec_command|finish_claw_crane|gain_skills|race_end|race_entry|race_out|ramen_live|select_region|tasting|uraf_effect_apply)$"),
+        new AnalyzerRegistrationExpectation(
+            typeof(SingleModeRamenCheckEventResponse),
+            EndpointPatternKind.Exact,
+            "/umamusume/single_mode_ramen/check_event"),
     };
 
     if (registry.Registrations.Count != expected.Length)
         throw new InvalidOperationException(
-            $"SendGameStatusPlugin must register exactly two Legend analyzers, got {registry.Registrations.Count}.");
+            $"SendGameStatusPlugin must register exactly five programmatic analyzers, got {registry.Registrations.Count}.");
 
     foreach (var (registration, expectation) in registry.Registrations.Zip(expected))
     {
@@ -247,7 +366,7 @@ static void AssertProgrammaticLegendRegistrations(SmokeAnalyzerRegistry registry
             || !string.Equals(pattern, expectation.Pattern, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
-                $"Unexpected Legend registration for {registration.PayloadType.Name}: " +
+                $"Unexpected registration for {registration.PayloadType.Name}: " +
                 $"{registration.Kind}, priority {registration.Priority}, " +
                 $"patterns [{string.Join(", ", registration.Patterns)}].");
         }
@@ -270,6 +389,7 @@ static void AssertAnalyzersAreSplitIntoFolder()
         "LegendAnalyzers.cs",
         "MechaAnalyzers.cs",
         "OnsenAnalyzers.cs",
+        "RamenAnalyzers.cs",
         "UafAnalyzers.cs",
     };
     foreach (var file in expectedFiles)
@@ -335,7 +455,7 @@ static void AssertAnalyzerPathDoesNotUseConsoleInteractionOutput()
     }
 }
 
-static void AssertGameStatusOutputTargetsPluginScenarioDirectories()
+static void AssertGameStatusOutputTargetsPluginDirectory()
 {
     var pluginRoot = FindRepositoryRoot();
     var sourceFiles = Directory
@@ -373,8 +493,8 @@ static void AssertProjectFileUsesHostPackage()
     var isUraPlugin = document.Descendants("IsUraPlugin").SingleOrDefault()?.Value;
     if (!string.Equals(isUraPlugin, "true", StringComparison.OrdinalIgnoreCase))
         throw new InvalidOperationException("SendGameStatusPlugin.csproj must set IsUraPlugin=true.");
-    if (document.Descendants("PluginDependencies").SingleOrDefault()?.Value != "EventLoggerPlugin")
-        throw new InvalidOperationException("SendGameStatusPlugin.csproj must declare EventLoggerPlugin as a plugin dependency.");
+    if (document.Descendants("PluginDependencies").SingleOrDefault()?.Value != "EventLoggerPlugin,RamenScenarioAnalyzer")
+        throw new InvalidOperationException("SendGameStatusPlugin.csproj must declare EventLoggerPlugin and RamenScenarioAnalyzer as plugin dependencies.");
 
     var hostReferences = document.Descendants("PackageReference").Where(x =>
         x.Attribute("Include")?.Value == "UmamusumeResponseAnalyzer" &&
@@ -415,7 +535,9 @@ sealed class SmokePluginContext(IApplication application) : IPluginContext
     public IPluginHostEvents Events { get; } = new SmokeHostEvents();
     public SmokeAnalyzerRegistry Analyzers { get; } = new();
     IPluginAnalyzerRegistry IPluginContext.Analyzers => Analyzers;
-    public bool IsPluginAvailable(string internalName) => false;
+    public bool RamenAvailable { get; set; }
+    public bool IsPluginAvailable(string internalName)
+        => internalName == "EventLoggerPlugin" || internalName == "RamenScenarioAnalyzer" && RamenAvailable;
 
     public void RunBackground(Func<CancellationToken, ValueTask> operation)
         => throw new InvalidOperationException("SendGameStatusPlugin must not start background work.");
@@ -430,13 +552,26 @@ sealed class SmokeHostEvents : IPluginHostEvents
 sealed class SmokeAnalyzerRegistry : IPluginAnalyzerRegistry
 {
     public List<AnalyzerRegistration> Registrations { get; } = [];
+    readonly List<(GameEndpointDescriptor Endpoint, Func<byte[], ValueTask> Handler)> handlers = [];
 
     public void Register<TPayload>(
         AnalyzerKind kind,
         IReadOnlyList<EndpointPattern> patterns,
         Func<AnalyzerInvocation<TPayload>, ValueTask> handler,
         int priority = 0)
-        => Registrations.Add(new(typeof(TPayload), kind, [.. patterns], handler, priority));
+    {
+        Registrations.Add(new(typeof(TPayload), kind, [.. patterns], handler, priority));
+        var expand = typeof(PluginManager).GetMethod("ExpandEndpointPatterns", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var endpoints = (IReadOnlyList<GameEndpointDescriptor>)expand.Invoke(null, [patterns])!;
+        foreach (var endpoint in endpoints)
+            handlers.Add((endpoint, bytes => handler(new(endpoint, MessagePackSerializer.Deserialize<TPayload>(bytes), new(null, null, null, null, null, null)))));
+    }
+
+    public void Dispatch(string path, object response)
+    {
+        var handler = handlers.Single(item => item.Endpoint.Path == path).Handler;
+        handler(MessagePackSerializer.Serialize(response.GetType(), response)).GetAwaiter().GetResult();
+    }
 }
 
 sealed record AnalyzerRegistration(

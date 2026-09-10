@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using EventLoggerPlugin;
 using Gallop;
 using RamenScenarioAnalyzer;
@@ -31,7 +32,7 @@ namespace SendGameStatusPlugin
         public int scenario_pt = 0; // checkpoint_pt
         public int next_scenario_pt = 0;
 
-        public RamenStatus(SingleModeRamenDataSet dataset, RamenStateSnapshot? state)
+        public RamenStatus(SingleModeRamenDataSet dataset)
         {
             // 1. feeling_gauge_gains：按 feeling_reduce_turn_info_array 顺序填充
             //    训练按 command_id ∈ {101,105,102,103,106} 顺序，组内按 feeling_turn_array 顺序
@@ -118,18 +119,17 @@ namespace SendGameStatusPlugin
                 super_ramen = dataset.uraf_effect_info.uraf_effect_type - 1;
             }
 
-            // 8. Load 独有字段：从 RamenScenarioState 快照填充；取不到（null）时保持默认值。
-            
-            if (state is not null)
-            {
-                selected_regions = (int[])state.selected_region_id_array
-                    .Select(x => x - 1)
-                    .ToArray();
-                feeling_gauge_gain_base = (int[])state.reduce_base_turn.Clone();
-                last_ramen = state.last_ramen - 1;
-                scenario_pt = state.check_point_pt;
-                next_scenario_pt = state.expected_check_point_pt;
-            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal void ReadState()
+        {
+            var state = RamenScenarioState.Snapshot();
+            selected_regions = state.selected_region_id_array.Select(x => x - 1).ToArray();
+            feeling_gauge_gain_base = (int[])state.reduce_base_turn.Clone();
+            last_ramen = state.last_ramen == -1 ? -1 : state.last_ramen - 1;
+            scenario_pt = state.check_point_pt;
+            next_scenario_pt = state.expected_check_point_pt;
         }
     }
 
@@ -138,72 +138,17 @@ namespace SendGameStatusPlugin
         public GameStatusSend_Base<PersonBase> baseGame { get; set; }
         public RamenStatus? ramen;
 
-        private static Gallop.SingleModeRamenCheckEventResponse ToCheckEventResponse(Gallop.SingleModeRamenExecCommandResponse @event) => new()
-        {
-            data = new()
-            {
-                chara_info = @event.data.chara_info,
-                gain_parameter_info = @event.data.gain_parameter_info,
-                not_up_parameter_info = @event.data.not_up_parameter_info,
-                not_down_parameter_info = @event.data.not_down_parameter_info,
-                gain_partner_support_effect_array = @event.data.gain_partner_support_effect_array,
-                home_info = @event.data.home_info,
-                unchecked_event_array = @event.data.unchecked_event_array,
-                race_condition_array = @event.data.race_condition_array,
-                race_start_info = null,
-                ramen_data_set = @event.data.ramen_data_set
-            }
-        };
-
-        /// <summary>
-        /// 把 Load 响应映射为 CheckEvent 响应形态，便于复用同一构造路径。
-        /// Load 没有的字段填默认值；race_start_info 强制 null。
-        /// </summary>
-        private static Gallop.SingleModeRamenCheckEventResponse ToCheckEventResponse(Gallop.SingleModeRamenLoadResponse @event)
-        {
-            var loadCommon = @event.data?.single_mode_load_common;
-            return new()
-            {
-                data = new()
-                {
-                    chara_info = loadCommon?.chara_info,
-                    gain_parameter_info = null,
-                    not_up_parameter_info = null,
-                    not_down_parameter_info = null,
-                    gain_partner_support_effect_array = null,
-                    home_info = loadCommon?.home_info,
-                    unchecked_event_array = loadCommon?.unchecked_event_array,
-                    event_effected_factor_array = null,
-                    race_condition_array = null,
-                    race_start_info = null,
-                    race_running_style = 0,
-                    select_index = 0,
-                    select_index_info_array = null,
-                    ramen_data_set = @event.data?.ramen_data_set,
-                    ramen_data_set_check_event = null
-                }
-            };
-        }
-
-        public GameStatusSend_Ramen(Gallop.SingleModeRamenCheckEventResponse @event)
+        internal GameStatusSend_Ramen(SingleModeRamenCheckEventResponse @event, bool hasRamenState)
         {
             var round = EventLogger.Current;
             baseGame = new GameStatusSend_Base<PersonBase>(@event, round);
             baseGame.scenarioId = 14;
-            baseGame.source = "event";
             if (@event.data.ramen_data_set != null)
             {
-                // 不再校验 loaded / charaId 是否匹配，始终把当前快照交给 RamenStatus。
-                // RamenStatus 内部按字段尽量取快照值；快照无效时由字段默认值兜底。
-                var state = RamenScenarioState.Snapshot();
-                ramen = new RamenStatus(@event.data.ramen_data_set, state);
+                ramen = new RamenStatus(@event.data.ramen_data_set);
+                if (hasRamenState)
+                    ramen.ReadState();
             }
-        }
-
-        public GameStatusSend_Ramen(SingleModeRamenLoadResponse @event)
-            : this(ToCheckEventResponse(@event))
-        {
-            baseGame.source = "load";
         }
 
         public void doSend()

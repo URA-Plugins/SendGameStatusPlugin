@@ -1,7 +1,5 @@
+using System.Runtime.CompilerServices;
 using Gallop;
-using Gallop.Endpoints;
-using UmamusumeResponseAnalyzer;
-using UmamusumeResponseAnalyzer.Plugin;
 
 namespace SendGameStatusPlugin;
 
@@ -10,7 +8,7 @@ namespace SendGameStatusPlugin;
 /// 各 RegisterAnalyzer 入口先用 FromXxx 工厂把 response 映射为此类型，再交给 AnalyzeRamen 统一处理。
 /// </summary>
 public sealed record RamenResponse(
-    SingleModeChara CharaInfo,
+    SingleModeChara? CharaInfo,
     SingleModeHomeInfo? HomeInfo,
     SingleModeEventInfo[]? UncheckedEventArray,
     SingleRaceStartInfo? RaceStartInfo,
@@ -64,7 +62,17 @@ public sealed record RamenResponse(
 
 public partial class SendGameStatusPlugin
 {
-    static ValueTask AnalyzeRamen(RamenResponse data)
+    ValueTask AnalyzeRamen(RamenResponse data)
+    {
+        if (data.CharaInfo is null || data.HomeInfo?.command_info_array is not { Length: >= 5 }
+            || !pluginContext!.IsPluginAvailable("EventLoggerPlugin"))
+            return ValueTask.CompletedTask;
+
+        return AnalyzeRamenWithDependencies(data, pluginContext.IsPluginAvailable("RamenScenarioAnalyzer"));
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static ValueTask AnalyzeRamenWithDependencies(RamenResponse data, bool hasRamenState)
     {
         // 反向映射到 CheckEventResponse 形态，复用 GameStatusSend_Ramen(CheckEventResponse) 构造。
         var checkEventResponse = new SingleModeRamenCheckEventResponse
@@ -89,12 +97,13 @@ public partial class SendGameStatusPlugin
             }
         };
 
-        var send = new GameStatusSend_Ramen(checkEventResponse);
+        var send = new GameStatusSend_Ramen(checkEventResponse, hasRamenState);
         if (!send.baseGame.islegal)
             return ValueTask.CompletedTask;
 
         // base 实例方法：基于自身 source / playing_state / story 与外部 UncheckedEventArray
         // 解析最终 source；返回 null 表示本帧不发送。
+        send.baseGame.source = data.Source;
         var finalSource = send.baseGame.ResolveSource(data.UncheckedEventArray);
         if (finalSource is null)
             return ValueTask.CompletedTask;

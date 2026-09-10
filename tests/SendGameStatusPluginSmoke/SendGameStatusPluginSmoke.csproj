@@ -23,6 +23,9 @@
       Include="..\..\deps\EventLoggerPlugin\EventLoggerPlugin.csproj"
       AdditionalProperties="$(_SmokeProjectReferenceProperties)" />
     <ProjectReference
+      Include="..\..\deps\RamenScenarioAnalyzer\RamenScenarioAnalyzer.csproj"
+      AdditionalProperties="$(_SmokeProjectReferenceProperties)" />
+    <ProjectReference
       Include="..\..\SendGameStatusPlugin.csproj"
       AdditionalProperties="$(_SmokeProjectReferenceProperties)" />
   </ItemGroup>

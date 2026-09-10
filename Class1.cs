@@ -33,7 +33,6 @@ public partial class SendGameStatusPlugin : IPlugin
             priority: 2);
 
         // 拉面杯：注册 3 种 response（Load / ExecCommand / CheckEvent），统一走中间类型 RamenResponse，再交给 AnalyzeRamen。
-        // 注意，由于重构的原因，其他没有列出的剧本, Analyzer属于断开状态，无法发送数据。
         RegisterAnalyzer<SingleModeRamenLoadResponse>(
             EndpointPattern.Exact(RamenLoadEndpoint),
             resp => AnalyzeRamen(RamenResponse.FromLoad(resp)));

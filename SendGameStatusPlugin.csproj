@@ -5,12 +5,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>2026.9.10</Version>
+    <Version>2026.9.11</Version>
 
     <PluginInternalName>SendGameStatusPlugin</PluginInternalName>
     <PluginDisplayName>向AI发送游戏信息</PluginDisplayName>
     <PluginAuthor>UmaAi Team</PluginAuthor>
     <PluginDescription>如果AI程序没打开就没任何作用</PluginDescription>
+    <PluginChangelog>新增拉面杯状态发送；修复响应来源、缺少主页数据时的处理和未试吃状态值；按育成 ID、回合及序号保存输出；同步可选插件依赖。</PluginChangelog>
     <PluginRepositoryUrl>https://github.com/URA-Plugins/SendGameStatusPlugin</PluginRepositoryUrl>
     <PluginDependencies>EventLoggerPlugin,RamenScenarioAnalyzer</PluginDependencies>
   </PropertyGroup>

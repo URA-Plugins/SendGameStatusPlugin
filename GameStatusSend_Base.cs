@@ -1,4 +1,5 @@
-﻿using EventLoggerPlugin;
+using EventLoggerPlugin;
+using Gallop;
 using UmamusumeResponseAnalyzer;
 using UmamusumeResponseAnalyzer.Entities;
 
@@ -64,11 +65,11 @@ namespace SendGameStatusPlugin
         public int[,] personDistribution;//每个训练有哪些人头id，personDistribution[哪个训练][第几个人头]，空人头为-1
         public int lockedTrainingId;
         public int friendship_noncard_yayoi;//非卡理事长的羁绊，带了理事长卡就是0
-        public int friendship_noncard_reporter;//非卡记者的羁绊       
+        public int friendship_noncard_reporter;//非卡记者的羁绊
 
         //单独处理友人卡，因为接近必带。其他友人团队卡的以后再考虑
         //public int friend_type;//0没带友人卡，1 ssr卡，2 r卡
-        //public int friend_cardId;   // 单独存放友人卡ID
+        //public int friend_cardId;  // 单独存放友人卡ID
         //public int friend_personId;//友人卡在persons里的编号
         public int friend_stage;//0未点击，1点击还未解锁出行，2已解锁出行
         public int friend_outgoingUsed;//出行已经走了几段了   暂时不考虑其他友人团队卡的出行
@@ -79,7 +80,48 @@ namespace SendGameStatusPlugin
         public int playing_state;
         public int[] raceHistory;  // 取胜的回合数，从0开始，没赢的不计入
 
+        /// <summary>
+        /// 当前育成 ID（single_mode_chara_id）。
+        /// 文件名、跨插件状态判断均依赖此字段。
+        /// </summary>
+        public int single_mode_chara_id;
+
+        /// <summary>
+        /// 标识本实例从哪类响应构造。可空，旧的 payload 类保持 null。
+        /// 拉面杯场景下："load" / "command" / "event" / "special"。
+        /// </summary>
+        public string? source { get; set; }
+
         public Story story;
+
+        /// <summary>
+        /// 基于本实例的 <see cref="source"/> / <see cref="playing_state"/> / <see cref="story"/> 字段
+        /// 与外部传入的 <paramref name="uncheckedEventArray"/> 综合解析为最终 source。
+        /// 返回 null 表示本帧不发送（调用方应跳过 doSend）。
+        /// 规则（按本实例的 source 分支）：
+        /// - "command" + playing_state == 1          → "command"
+        /// - "command" + 1 < playing_state < 10      → null（中间状态，跳过发送）
+        /// - "command" + playing_state >= 10         → "special"
+        /// - "event" + story 有值                    → "event"（最高优先级）
+        /// - "event" + story null + UncheckedEventArray 有内容 → null（不可决策事件）
+        /// - "event" + story null + UncheckedEventArray 为空 + 1 < playing_state < 10 → null
+        /// - "event" + story null + UncheckedEventArray 为空 + playing_state 其它 → "command"
+        /// - 其它（load / 业务自定义）                → 原样保留
+        /// </summary>
+        public string? ResolveSource(SingleModeEventInfo[]? uncheckedEventArray)
+            => source switch
+            {
+                "command" when playing_state == 1     => "command",
+                "command" when playing_state < 10      => null,
+                "command"                              => "special",
+                "event" when story is not null         => "event",
+                "event" when uncheckedEventArray is { Length: > 0 } => null,
+                "event" when uncheckedEventArray is null or { Length: 0 }
+                                                  && playing_state > 1
+                                                  && playing_state < 10 => null,
+                "event"                                => "command",
+                _                                      => source,
+            };
 
         public bool isRepeatTurn()
         {
@@ -103,24 +145,18 @@ namespace SendGameStatusPlugin
         {
         }
 
+        internal GameStatusSend_Base(
+            Gallop.SingleModeRamenCheckEventResponse @event,
+            EventLoggerRoundSnapshot round)
+            : this(CheckEventContext.From(@event), round)
+        {
+        }
+
         private GameStatusSend_Base(CheckEventContext @event, EventLoggerRoundSnapshot round)
         {
             islegal = false;
+            single_mode_chara_id = @event.data.chara_info.single_mode_chara_id;
             playing_state = @event.data.chara_info.playing_state;
-            //if ((@event.data.unchecked_event_array != null && @event.data.unchecked_event_array.Length > 0)) return;
-            if (
-                (@event.data.chara_info.playing_state == 1) ||
-                (@event.data.chara_info.playing_state == 26 && @event.data.chara_info.scenario_id == (int)ScenarioType.Mecha) ||
-                (@event.data.chara_info.playing_state == 36 && @event.data.chara_info.scenario_id == (int)ScenarioType.Onsen)
-                )
-            {
-
-            }
-            else
-            {
-                //重复显示的回合直接return，就不发了
-                return;
-            }
 
             //if(@event.data.race_start_info != null)
             isRacing = true;
@@ -285,6 +321,11 @@ namespace SendGameStatusPlugin
                         friend_type = 1;
                         break;
                     case 30276: // ssr健子
+                        persons[i].personType = 1;
+                        friend_personId = i;
+                        friend_type = 2;
+                        break;
+                    case 30305: // ssr绿帽
                         persons[i].personType = 1;
                         friend_personId = i;
                         friend_type = 2;

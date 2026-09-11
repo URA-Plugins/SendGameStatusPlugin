@@ -1,3 +1,6 @@
 [submodule "EventLoggerPlugin"]
 	path = deps/EventLoggerPlugin
 	url = https://github.com/URA-Plugins/EventLoggerPlugin.git
+[submodule "RamenScenarioAnalyzer"]
+	path = deps/RamenScenarioAnalyzer
+	url = https://github.com/URA-Plugins/RamenScenarioAnalyzer.git

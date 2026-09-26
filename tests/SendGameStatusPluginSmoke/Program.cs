@@ -13,7 +13,7 @@ using TargetPlugin = SendGameStatusPlugin.SendGameStatusPlugin;
 
 using var ui = new WorkspaceSmokeSession();
 
-AssertWorkspaceLifecycle(ui);
+await AssertWorkspaceLifecycle(ui);
 AssertAnalyzersAreSplitIntoFolder();
 AssertAnalyzerPathDoesNotWriteRawAnsiConsole();
 AssertAnalyzerPathDoesNotUseConsoleInteractionOutput();
@@ -22,7 +22,7 @@ AssertProjectFileUsesHostPackage();
 
 Console.WriteLine("PASS SendGameStatusPlugin smoke");
 
-static void AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
+static async Task AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
 {
     var originalDirectory = Directory.GetCurrentDirectory();
     var tempDirectory = Path.Combine(Path.GetTempPath(), "SendGameStatusPluginSmoke", Guid.NewGuid().ToString("N"));
@@ -65,7 +65,7 @@ static void AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
         }
         finally
         {
-            plugin.Dispose();
+            await plugin.DisposeAsync();
         }
 
         if (!ReferenceEquals(Workspace.Current, ui.Bootstrap)
@@ -230,7 +230,7 @@ static void AssertExactAnalyzerDispatch(IPlugin plugin)
             data = new() { chara_info = new() { state = 2 }, unchecked_event_array = [] }
         }),
     };
-    var registrations = PluginManager.CreateRegistrationPlan(plugin).Analyzers
+    var registrations = PluginManager.CreateAttributeRegistrations(plugin)
         .Where(registration => registration.Kind == AnalyzerKind.Response)
         .ToArray();
     if (registrations.Length != cases.Length)
@@ -532,21 +532,14 @@ static string FindRepositoryRoot()
 sealed class SmokePluginContext(IApplication application) : IPluginContext
 {
     public IApplication Application { get; } = application;
-    public IPluginHostEvents Events { get; } = new SmokeHostEvents();
     public SmokeAnalyzerRegistry Analyzers { get; } = new();
     IPluginAnalyzerRegistry IPluginContext.Analyzers => Analyzers;
     public bool RamenAvailable { get; set; }
     public bool IsPluginAvailable(string internalName)
         => internalName == "EventLoggerPlugin" || internalName == "RamenScenarioAnalyzer" && RamenAvailable;
 
-    public void RunBackground(Func<CancellationToken, ValueTask> operation)
-        => throw new InvalidOperationException("SendGameStatusPlugin must not start background work.");
-}
-
-sealed class SmokeHostEvents : IPluginHostEvents
-{
-    public void OnStarted(Func<CancellationToken, ValueTask> handler)
-        => throw new InvalidOperationException("SendGameStatusPlugin must not register a host-start callback.");
+    public void ReportBackgroundFailure(Exception error)
+        => throw new InvalidOperationException("SendGameStatusPlugin background work failed.", error);
 }
 
 sealed class SmokeAnalyzerRegistry : IPluginAnalyzerRegistry

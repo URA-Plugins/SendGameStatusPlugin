@@ -9,7 +9,7 @@ jobs:
   plugin:
     permissions:
       contents: write
-    uses: URA-Plugins/.github/.github/workflows/plugin.yml@v1
+    uses: URA-Plugins/.github/.github/workflows/plugin.yml@7970f0993712db9133b18dd0860097cc61fd640a
     with:
       project: SendGameStatusPlugin.csproj
       publish: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}

@@ -10,6 +10,8 @@ JSON 写入 `PluginData/SendGameStatusPlugin/`：`thisTurn.json` 保存最近一
 
 拉面剧本使用 `scenarioId=14`。`baseGame.source` 区分 `load`、`command`、`event` 和 `special`；命令响应的 `playing_state >= 10` 记为 `special`，中间命令状态跳过输出。RamenScenarioAnalyzer 可用时读取其进程内快照补充地区、诀窍基础增量与检查点分数，快照缺失不阻止输出。`last_ramen=-1` 表示尚未品尝。
 
+终局帧：育成结束（`chara_info.state` 为 2 或 3、且无待处理事件）时，另外单独写一份 `finalScore.json`（固定名、扁平结构、只含五维/上限/剩余技能点/继承增量等终局数据，**不写** `thisTurn.json`，同一育成只写第一份）。判据与端点用通用 `single_mode*/check_event`、`single_mode*/load` 注册，全剧本共用；umaai 侧目前只消费 `scenarioId=14`。
+
 插件没有可配置项，也不连接、检测或启动 AI 进程。AI 未运行或未读取这些文件时，插件仍会生成 JSON，但不会产生 AI 计算或回传结果。
 
 ## 构建

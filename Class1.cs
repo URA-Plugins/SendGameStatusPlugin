@@ -42,6 +42,18 @@ public partial class SendGameStatusPlugin : IPlugin
         RegisterAnalyzer<SingleModeRamenCheckEventResponse>(
             EndpointPattern.Exact(RamenCheckEventEndpoint),
             resp => AnalyzeRamen(RamenResponse.FromCheckEvent(resp)));
+
+        // 终局帧：育成结束·点技能前单独写一份 finalScore.json。用通用 response 类型 +
+        // wildcard（同 SkillTipsResponseAnalyzer），全剧本共用；是否解析由 umaai 侧按
+        // scenarioId 决定。终局帧不进决策链路，故独立于上面的回合快照注册。
+        RegisterAnalyzer<SingleModeCheckEventResponse>(
+            EndpointPattern.Wildcard("/umamusume/single_mode*/check_event"),
+            resp => AnalyzeGameEnd(resp.data?.chara_info, resp.data?.unchecked_event_array));
+        RegisterAnalyzer<SingleModeLoadResponse>(
+            EndpointPattern.Wildcard("/umamusume/single_mode*/load"),
+            resp => AnalyzeGameEnd(
+                resp.data?.single_mode_load_common?.chara_info,
+                resp.data?.single_mode_load_common?.unchecked_event_array));
     }
 
     /// <summary>

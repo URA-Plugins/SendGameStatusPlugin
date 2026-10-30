@@ -56,6 +56,7 @@ static async Task AssertWorkspaceLifecycle(WorkspaceSmokeSession ui)
                 throw new InvalidOperationException("A real scenario write did not produce both status files.");
             }
             AssertRamenDispatch(context, outputDirectory);
+            AssertGameEndDispatch(context, outputDirectory);
             if (!ReferenceEquals(Workspace.Current, ui.Bootstrap)
                 || !string.Equals(baseline, ui.CaptureScreen(), StringComparison.Ordinal))
             {
@@ -150,6 +151,10 @@ static void AssertRamenDispatch(SmokePluginContext context, string outputDirecto
             var current = JObject.Parse(currentJson);
             if ((string?)current["baseGame"]?["source"] != source
                 || (int?)current["baseGame"]?["scenarioId"] != 14
+                || (int?)current["baseGame"]?["totalHints"] != 10
+                || (int?)current["baseGame"]?["PositiveThinkingCount"] != 3
+                || (int?)current["baseGame"]?["LuckyCount"] != 2
+                || (bool?)current["baseGame"]?["isXiaoQie"] != true
                 || (int?)current["ramen"]?["last_ramen"] != -1)
                 throw new InvalidOperationException($"Ramen {path}/{state} did not preserve its source or default state.");
 
@@ -184,6 +189,80 @@ static void AssertRamenDispatch(SmokePluginContext context, string outputDirecto
         RamenScenarioState.Clear();
         context.RamenAvailable = false;
     }
+}
+
+static void AssertGameEndDispatch(SmokePluginContext context, string outputDirectory)
+{
+    var thisTurnPath = Path.Combine(outputDirectory, "thisTurn.json");
+    var thisTurnBefore = File.ReadAllText(thisTurnPath);
+
+    // 终局帧：育成结束态 + 无待处理事件。五维/上限按 ReviseOver1200 换算
+    //（原始值 2213 → 3226 等，与 thisTurn.json 快照同口径）。
+    var charaInfo = new SingleModeChara
+    {
+        single_mode_chara_id = 333,
+        card_id = 109701,
+        rarity = 5,
+        scenario_id = 14,
+        turn = 78,
+        state = 2,
+        playing_state = 1,
+        speed = 2213,
+        stamina = 1681,
+        power = 1439,
+        guts = 1089,
+        wiz = 1769,
+        max_speed = 2221,
+        max_stamina = 1822,
+        max_power = 1703,
+        max_guts = 1700,
+        max_wiz = 1853,
+        skill_point = 7717,
+        // 终局帧总 Hint 等级 = 3 + 4
+        skill_tips_array =
+        [
+            new() { group_id = 100011, rarity = 1, level = 3 },
+            new() { group_id = 100012, rarity = 2, level = 4 }
+        ]
+    };
+    var terminal = new SingleModeRamenCheckEventResponse
+    {
+        data = new()
+        {
+            chara_info = charaInfo,
+            unchecked_event_array = [],
+            ramen_data_set = new()
+        }
+    };
+
+    context.Analyzers.Dispatch("/umamusume/single_mode_ramen/check_event", terminal);
+
+    var finalPath = Path.Combine(outputDirectory, "finalScore.json");
+    if (!File.Exists(finalPath))
+        throw new InvalidOperationException("A terminal frame did not produce finalScore.json.");
+    if (File.ReadAllText(thisTurnPath) != thisTurnBefore)
+        throw new InvalidOperationException("A terminal frame must not touch thisTurn.json.");
+
+    var final = JObject.Parse(File.ReadAllText(finalPath));
+    if ((int?)final["scenarioId"] != 14
+        || (int?)final["single_mode_chara_id"] != 333
+        || (int?)final["umaId"] != 109701
+        || (int?)final["turn"] != 77
+        || (int?)final["state"] != 2
+        || (int?)final["skillPt"] != 7717
+        || (int?)final["totalHints"] != 7
+        || final["baseGame"] is not null)
+        throw new InvalidOperationException("finalScore.json does not match the terminal frame contract.");
+    if (!final["fiveStatus"]!.Values<int>().SequenceEqual([3226, 2162, 1678, 1089, 2338])
+        || !final["fiveStatusLimit"]!.Values<int>().SequenceEqual([3242, 2444, 2206, 2200, 2506]))
+        throw new InvalidOperationException(
+            "finalScore.json must carry ReviseOver1200-adjusted status and limits.");
+
+    // 首份不覆盖：同一局再进终局画面（技能点变小）不得改写已落盘的帧。
+    charaInfo.skill_point = 1;
+    context.Analyzers.Dispatch("/umamusume/single_mode_ramen/check_event", terminal);
+    if ((int?)JObject.Parse(File.ReadAllText(finalPath))["skillPt"] != 7717)
+        throw new InvalidOperationException("The first terminal frame must not be overwritten.");
 }
 
 static void AssertExactAnalyzerDispatch(IPlugin plugin)
@@ -285,7 +364,13 @@ static SingleModeOnsenCheckEventResponse CreateWritableOnsenResponse()
                 max_wiz = 1200,
                 skill_point = 100,
                 skill_array = [],
-                skill_tips_array = [],
+                // 总 Hint 等级 = 3 + 5 + 2
+                skill_tips_array =
+                [
+                    new() { group_id = 100011, rarity = 1, level = 3 },
+                    new() { group_id = 100012, rarity = 2, level = 5 },
+                    new() { group_id = 100013, rarity = 1, level = 2 }
+                ],
                 support_card_array = [],
                 evaluation_info_array =
                 [
@@ -303,7 +388,8 @@ static SingleModeOnsenCheckEventResponse CreateWritableOnsenResponse()
                         level = 1
                     })
                 ],
-                chara_effect_id_array = []
+                // 心情盾 25/41/42 各一次 → PositiveThinkingCount = 3；幸运体质 26/43 → LuckyCount = 2；40 = 小切
+                chara_effect_id_array = [25, 26, 40, 41, 42, 43]
             },
             home_info = new()
             {
@@ -350,11 +436,19 @@ static void AssertProgrammaticRegistrations(SmokeAnalyzerRegistry registry)
             typeof(SingleModeRamenCheckEventResponse),
             EndpointPatternKind.Exact,
             "/umamusume/single_mode_ramen/check_event"),
+        new AnalyzerRegistrationExpectation(
+            typeof(SingleModeCheckEventResponse),
+            EndpointPatternKind.Wildcard,
+            "/umamusume/single_mode*/check_event"),
+        new AnalyzerRegistrationExpectation(
+            typeof(SingleModeLoadResponse),
+            EndpointPatternKind.Wildcard,
+            "/umamusume/single_mode*/load"),
     };
 
     if (registry.Registrations.Count != expected.Length)
         throw new InvalidOperationException(
-            $"SendGameStatusPlugin must register exactly five programmatic analyzers, got {registry.Registrations.Count}.");
+            $"SendGameStatusPlugin must register exactly seven programmatic analyzers, got {registry.Registrations.Count}.");
 
     foreach (var (registration, expectation) in registry.Registrations.Zip(expected))
     {
@@ -562,8 +656,10 @@ sealed class SmokeAnalyzerRegistry : IPluginAnalyzerRegistry
 
     public void Dispatch(string path, object response)
     {
-        var handler = handlers.Single(item => item.Endpoint.Path == path).Handler;
-        handler(MessagePackSerializer.Serialize(response.GetType(), response)).GetAwaiter().GetResult();
+        var bytes = MessagePackSerializer.Serialize(response.GetType(), response);
+        foreach (var (endpoint, handler) in handlers)
+            if (endpoint.Path == path)
+                handler(bytes).GetAwaiter().GetResult();
     }
 }
 

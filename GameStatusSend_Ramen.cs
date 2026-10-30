@@ -149,6 +149,45 @@ namespace SendGameStatusPlugin
                 if (hasRamenState)
                     ramen.ReadState();
             }
+            ApplyTrainLevelProgressFromHistory(round, @event.data.chara_info.turn);
+        }
+
+        /// <summary>
+        /// 拉面专属：用 EventLogger 逐回合记录的 <c>PlayerChoice</c> 重建「训练等级内点击数」。
+        ///
+        /// 通用 <c>GameStatusSend_Base</c> 只按等级折算 <c>4×(level−1)</c>（等级内余数恒为 0），
+        /// 会让 AI 误判「离下一级还差整整 4 次」。真机点击数不随协议下发——拉面的
+        /// <c>ramen_data_set.training_exec_info_array</c> 实测恒为 null——故按 Cook 分支同款做法，
+        /// 从 EventLogger 历史里回数（剔除训练失败与夏合宿），再补回等级内余数。
+        ///
+        /// **回合口径**：<c>EventLogger</c> 的 <c>Turns[]</c> 按原始 <c>chara_info.turn</c> 索引，是
+        /// **1 基**（只有写 `thisTurn.json` 时才 -1 转成 AI 的 0 基）。故此处夏合宿取 **37-40 / 61-64**
+        /// （= 0 基的 36-39 / 60-63，与 umasim 的 <c>is_xiahesu</c> 同区间；真机 level 同样不计）。
+        /// 等级封顶 5（<c>count = 16</c>）后不再叠加余数（与 Cook 同款守卫）。
+        /// </summary>
+        void ApplyTrainLevelProgressFromHistory(EventLoggerRoundSnapshot round, int currentTurn)
+        {
+            var clickCount = new int[5];
+            for (var t = currentTurn - 1; t >= 1; t--) // t 为 1 基回合
+            {
+                if (round.Turns[t] is not { } stats)
+                    break; // 更早的回合没有记录；尾部连续段已够算余数
+                if (!GameGlobal.TrainIds.Any(x => x == stats.PlayerChoice)) // 该回合没训练
+                    continue;
+                if (stats.IsTrainingFailed) // 训练失败不计
+                    continue;
+                if ((t >= 37 && t <= 40) || (t >= 61 && t <= 64)) // 夏合宿点击不计（1 基；与真机 level 同源）
+                    continue;
+                clickCount[GameGlobal.ToTrainIndex[stats.PlayerChoice]] += 1;
+            }
+            for (var i = 0; i < GameGlobal.TrainIds.Length; i++)
+            {
+                var level = baseGame.trainLevelCount[i] / 4 + 1; // 真机等级（已含剧本加成）
+                var count = (level - 1) * 4;
+                if (count < 16)
+                    count += clickCount[i] % 4; // 5 级封顶后不再叠加等级内余数
+                baseGame.trainLevelCount[i] = count;
+            }
         }
 
         public void doSend()

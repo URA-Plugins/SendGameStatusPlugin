@@ -31,6 +31,20 @@ internal static class GameStatusOutput
     public static void WriteScenarioData(object payload, int turn)
         => WritePluginData(payload, turn);
 
+    /// <summary>
+    /// 终局帧专用输出：固定文件名 <c>finalScore.json</c>（与局号、回合无关）。
+    /// 不写 <c>thisTurn.json</c>、不参与回合序号计数——终局帧不进决策链路。
+    /// </summary>
+    public static void WriteFinalScore(object payload)
+    {
+        lock (WriteGate)
+        {
+            Directory.CreateDirectory(PluginDataDirectory);
+            var json = JsonConvert.SerializeObject(payload, Formatting.Indented, Settings);
+            WriteAtomically(Path.Combine(PluginDataDirectory, "finalScore.json"), json);
+        }
+    }
+
     static void Write(string directory, object payload, int turn)
     {
         Directory.CreateDirectory(directory);

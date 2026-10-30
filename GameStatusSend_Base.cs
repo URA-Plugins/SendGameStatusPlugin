@@ -49,11 +49,12 @@ namespace SendGameStatusPlugin
         public int failureRateBias;//失败率改变量。练习上手=2，练习下手=-2
 
         public bool isQieZhe;//切者
+        public bool isXiaoQie;//小切（状态40）
         public bool isAiJiao;//爱娇
-        public bool isPositiveThinking;//ポジティブ思考，友人第三段出行选上的buff，可以防一次掉心情
+        public int PositiveThinkingCount;//心情盾次数：拥有状态25/41/42时各+1，最多3次（每次可防一次掉心情）
         public bool isRefreshMind;//休息的心得,每回合体力+5
         public bool isIll; // 生病，不区分种类
-        public bool isLucky; // 幸运体质
+        public int LuckyCount;//幸运体质次数：拥有状态26/43时各+1
 
         public int[] zhongMaBlueCount;//种马的蓝因子个数，假设只有3星
         public int[] zhongMaExtraBonus;//种马的剧本因子以及技能白因子（等效成pt），每次继承加多少。全大师杯因子典型值大约是30速30力200pt
@@ -78,7 +79,35 @@ namespace SendGameStatusPlugin
         /// 游戏状态，不为1时，为重复回合
         /// </summary>
         public int playing_state;
+
+        /// <summary>
+        /// 是否为训练后：当前回合（1 起始）已经执行过任意指令（训练/休息/出行等）。
+        /// 来自 EventLogger 记录的最近一次指令回合，-1 表示本局尚未行动。
+        /// </summary>
+        public bool isAfterTraining;
+
+        /// <summary>
+        /// 本局是否从第 1 回合开始完整记录（EventLogger 会话标记）。
+        /// false 表示中途加载进入，EventLogger 之前回合的历史数据不完整。
+        /// </summary>
+        public bool isFullGame;
         public int[] raceHistory;  // 取胜的回合数，从0开始，没赢的不计入
+
+        /// <summary>
+        /// 本局已发生的关键事件 story_id 列表（友人首次点击事件、携带支援卡的支援卡连续事件）。
+        /// </summary>
+        public int[] keyEvents;
+
+        /// <summary>
+        /// 每次继承事件获得的属性增量，按继承发生顺序（对应 EventLogger 快照的 InheritStats；
+        /// 继承的技能点增量未在 EventLogger 公共快照中暴露，故不含 pt 部分）。
+        /// </summary>
+        public int[] inheritGains;
+
+        /// <summary>
+        /// 本局累计花掉的技能点（购买技能等导致的 pt 减少，由 EventLogger 逐次累计）。
+        /// </summary>
+        public int skillPtSpent;
 
         /// <summary>
         /// 当前育成 ID（single_mode_chara_id）。
@@ -99,11 +128,13 @@ namespace SendGameStatusPlugin
         /// 与外部传入的 <paramref name="uncheckedEventArray"/> 综合解析为最终 source。
         /// 返回 null 表示本帧不发送（调用方应跳过 doSend）。
         /// 规则（按本实例的 source 分支）：
+        /// - "command" + story 有值                    → "event"（响应携带待处理事件，story 优先于 command）
+        /// - "command" + UncheckedEventArray 有内容    → null（无需玩家选择的事件进行中，不保存）
         /// - "command" + playing_state == 1          → "command"
         /// - "command" + 1 < playing_state < 10      → null（中间状态，跳过发送）
         /// - "command" + playing_state >= 10         → "special"
-        /// - "event" + story 有值                    → "event"（最高优先级）
-        /// - "event" + story null + UncheckedEventArray 有内容 → null（不可决策事件）
+        /// - "event" + story 有值                    → "event"（事件帧仅在 story 有值时保存）
+        /// - "event" + story null + UncheckedEventArray 有内容 → null（无需玩家选择的事件进行中，不保存）
         /// - "event" + story null + UncheckedEventArray 为空 + 1 < playing_state < 10 → null
         /// - "event" + story null + UncheckedEventArray 为空 + playing_state 其它 → "command"
         /// - 其它（load / 业务自定义）                → 原样保留
@@ -111,16 +142,18 @@ namespace SendGameStatusPlugin
         public string? ResolveSource(SingleModeEventInfo[]? uncheckedEventArray)
             => source switch
             {
-                "command" when playing_state == 1     => "command",
-                "command" when playing_state < 10      => null,
-                "command"                              => "special",
-                "event" when story is not null         => "event",
-                "event" when uncheckedEventArray is { Length: > 0 } => null,
+                "command" when story is not null                      => "event",
+                "command" when uncheckedEventArray is { Length: > 0 } => null,
+                "command" when playing_state == 1                     => "command",
+                "command" when playing_state < 10                     => null,
+                "command"                                             => "special",
+                "event" when story is not null                        => "event",
+                "event" when uncheckedEventArray is { Length: > 0 }   => null,
                 "event" when uncheckedEventArray is null or { Length: 0 }
-                                                  && playing_state > 1
-                                                  && playing_state < 10 => null,
-                "event"                                => "command",
-                _                                      => source,
+                                           && playing_state > 1
+                                           && playing_state < 10       => null,
+                "event"                                               => "command",
+                _                                                     => source,
             };
 
         public bool isRepeatTurn()
@@ -171,6 +204,10 @@ namespace SendGameStatusPlugin
             //turn
             var turnNum = @event.data.chara_info.turn;//游戏里回合数从1开始
             turn = turnNum - 1;//ai里回合数从0开始
+            //是否为训练后：EventLogger 记录的最近一次指令回合（1 起始，-1 表示本局尚未行动）不早于当前回合
+            isAfterTraining = round.AfterTrainingTurn >= turnNum;
+            //本局是否从第1回合开始完整记录
+            isFullGame = round.IsFullGame;
             vital = @event.data.chara_info.vital;
             maxVital = @event.data.chara_info.max_vital;
             motivation = @event.data.chara_info.motivation;
@@ -181,6 +218,13 @@ namespace SendGameStatusPlugin
                 history.Add(t - 1);
             }
             raceHistory = history.ToArray();
+
+            // keyEvents 与 inheritGains：story_id 与属性增量均保持原值，不做回合数换算
+            keyEvents = round.KeyEvents.ToArray();
+            inheritGains = round.InheritStats.ToArray();
+
+            // 本局累计花掉的技能点
+            skillPtSpent = round.SkillPtSpent;
 
             fiveStatus = new int[]
             {
@@ -213,12 +257,17 @@ namespace SendGameStatusPlugin
                         failureRateBias = -2; break;
                     case 7:
                         isQieZhe = true; break;
+                    case 40:
+                        isXiaoQie = true; break;
                     case 8:
                         isAiJiao = true; break;
                     case 25:
-                        isPositiveThinking = true; break;
+                    case 41:
+                    case 42:
+                        PositiveThinkingCount += 1; break;
                     case 26:
-                        isLucky = true; break;
+                    case 43:
+                        LuckyCount += 1; break;
                     case 32:
                         isRefreshMind = true; break;
                 }
@@ -228,8 +277,8 @@ namespace SendGameStatusPlugin
 
             skillPt = @event.data.chara_info.skill_point;
 
-            // 新 ABI 下暂无公共 hint API。
-            totalHints = 0;
+            // 总 Hint 等级：skill_tips_array 每项 level 之和。字段缺失时记 0。
+            totalHints = (@event.data.chara_info.skill_tips_array ?? []).Sum(tip => tip.level);
 
             skillScore = 0;
             cardId = new int[6];

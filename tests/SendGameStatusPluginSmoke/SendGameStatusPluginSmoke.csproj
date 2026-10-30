@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="$(UraTestHostRoot)\eng\PluginTesting\SmokeHost.cs" Link="WorkspaceSmokeSession.cs" />
+    <Compile Include="../Support/*.cs" />
     <ProjectReference
       Include="$(UraTestHostRoot)\UmamusumeResponseAnalyzer\UmamusumeResponseAnalyzer.csproj"
       AdditionalProperties="$(_SmokeProjectReferenceProperties)" />

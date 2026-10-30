@@ -11,7 +11,10 @@ using UmamusumeResponseAnalyzer.TerminalGui;
 using UmamusumeResponseAnalyzer.Plugin;
 using TargetPlugin = SendGameStatusPlugin.SendGameStatusPlugin;
 
+RepositoryChecks.Run();
+
 using var ui = new WorkspaceSmokeSession();
+PluginLifecycleSmoke.Run(ui);
 
 await AssertWorkspaceLifecycle(ui);
 AssertAnalyzersAreSplitIntoFolder();
@@ -19,6 +22,8 @@ AssertAnalyzerPathDoesNotWriteRawAnsiConsole();
 AssertAnalyzerPathDoesNotUseConsoleInteractionOutput();
 AssertGameStatusOutputTargetsPluginDirectory();
 AssertProjectFileUsesHostPackage();
+
+await PackageLoadSmoke.RunAsync(ui);
 
 Console.WriteLine("PASS SendGameStatusPlugin smoke");
 

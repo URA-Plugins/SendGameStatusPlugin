@@ -21,12 +21,6 @@ git -c core.longpaths=true submodule update --init --recursive
 dotnet build .\SendGameStatusPlugin.csproj -c Release -m:1 -p:RuntimeIdentifier=win-x64 -p:SelfContained=false -p:PlatformTarget=AnyCPU -p:DeployUraPluginToLocalAppDataOnBuild=false
 ```
 
-Host-dependent smoke 位于 `tests/SendGameStatusPluginSmoke`。
-
-默认 smoke 执行本仓发布边界、生命周期和响应分发检查，并从 fresh ZIP 实际加载本插件、EventLogger 与 Ramen，核对共享状态、当前与编号 JSON 快照、workspace 不变及停机清理。测试工具源码由 `tests/Support/` 持有。
-
-本地运行默认 smoke 前，将 `URA_PLUGIN_SMOKE_PACKAGE_ROOT` 设为本轮 Release 构建 ZIP 所在的绝对目录；本仓及上述依赖必须各有唯一 ZIP。CI 使用共用 workflow 的 `GITHUB_WORKSPACE/artifacts`，缺包或重复包使测试失败。
-
 ## 验证与发布
 
 在 Windows 仓库根执行 `act workflow_dispatch --artifact-server-path "$env:TEMP/ura-act-artifacts"`。本地与 GitHub 使用同一份 workflow；版本 tag 触发 GitHub Release 发布。环境要求、共用 workflow 本地映射和发布规则见 [URA plugin workflows](https://github.com/URA-Plugins/.github/blob/v1/README.md)。

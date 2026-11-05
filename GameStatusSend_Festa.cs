@@ -1,6 +1,7 @@
 using EventLoggerPlugin;
 using FestaScenarioAnalyzer;
 using Gallop;
+using UmamusumeResponseAnalyzer;
 
 namespace SendGameStatusPlugin
 {
@@ -24,13 +25,14 @@ namespace SendGameStatusPlugin
     }
 
     /// <summary>
-    /// 担当名单条目。<c>targetId</c> 与 <c>distribution</c> 同一编号空间（卡位 1 基）。
+    /// 担当名单条目。<c>targetId</c> 与 <c>baseGame.personDistribution</c> 同一编号空间
+    /// （支援卡位 1 基、理事长 102、记者 103、NPC ≥1000），但这里保留<b>协议原始值</b>，
+    /// 不做 BaseGame 的 0 基换算。演目归属只有这里能表达，故不进 <c>baseGame</c>。
     /// <c>origin</c> 取 <c>card / friend / guest / yayoi / reporter</c>。
     /// </summary>
     public class FestaPersonFrame
     {
         public int targetId;
-        public int charaId;
         public int actType;
         public string origin = "";
     }
@@ -44,16 +46,23 @@ namespace SendGameStatusPlugin
         public FestaActFrame[] acts = [];
         public int maxActLevel;
         public int campRemain;          // summer_camp_remain_turn_num
-        public int assistSupportLeft;   // 状态 47 存在时取 training_bonus_remain_turn_num，否则 0
+        /// <summary>
+        /// 助力支撑是否生效：状态 47 存在时为 1，否则 0。<b>只表示有无，不是剩余次数</b>。
+        /// 协议不给次数（<c>home_info.training_bonus_remain_turn_num</c> 在骏大祭恒 0），
+        /// 插件侧也不维护计数器——需要次数时由消费端按自己的规则累计。
+        /// </summary>
+        public int assistSupportLeft;
         public bool fatigueRecovery;    // 状态 45
         public FestaCheckPointFrame[] checkPoints = [];
         /// <summary>协议总等级（含発表会 +1），5 项按训练位排序。</summary>
         public int[] trainLevelTotal = new int[5];
         /// <summary>追加稽古标记，逐训练位；engine 侧取任一为真。</summary>
         public bool[] kensan = new bool[5];
+        /// <summary>
+        /// 担当名单：人物 id、来源与所属演目。训练位参与者已并入
+        /// <c>baseGame.personDistribution</c>，此处不重复发分布，只补「谁属于哪个演目」。
+        /// </summary>
         public FestaPersonFrame[] persons = [];
-        /// <summary>每个训练位的参与者 target_id（原始协议值，1 基卡位 / 102 / 103 / ≥1000）。</summary>
-        public int[][] distribution = new int[5][];
     }
 
     public class GameStatusSend_Festa : IHasBaseGame
@@ -85,9 +94,64 @@ namespace SendGameStatusPlugin
 
             ApplyTrainLevelCounts(round);
             ApplyPersonDistribution(snapshot);
+            ApplyPersonCharaIds(chara);
             ApplyFriendStage(chara);
+            ApplyTraining(@event.data.home_info, @event.data.festa_data_set);
 
             festa = BuildFrame(snapshot, chara);
+        }
+
+        /// <summary>
+        /// 填充通用段的 <c>training</c>：逐条可训练指令给出「下层 / 上层」两块 7 项增量。
+        /// 直接遍历协议而非按 5 个训练位展开，这样稽古（5101–5105）、转成（601–605）
+        /// 以及以后剧本新增的训练项都能原样落进来，映射由 AI 端自己做。
+        /// </summary>
+        void ApplyTraining(SingleModeHomeInfo? home, SingleModeFestaDataSet? data)
+        {
+            var result = new Dictionary<int, TrainingFrame>();
+            foreach (var command in home?.command_info_array ?? [])
+            {
+                // command_type 1 才是训练；is_enable 为 0 的位本回合打不了，不出现。
+                if (command.command_type != 1 || command.is_enable != 1)
+                    continue;
+
+                if (!result.TryGetValue(command.command_id, out var frame))
+                {
+                    frame = new TrainingFrame { failureRate = command.failure_rate };
+                    result[command.command_id] = frame;
+                }
+
+                Accumulate(frame.lower, command.params_inc_dec_info_array);
+                foreach (var scenario in data?.command_info_array ?? [])
+                    if (scenario.command_type == 1 && scenario.command_id == command.command_id)
+                        Accumulate(frame.upper, scenario.params_inc_dec_info_array);
+            }
+
+            // 空字典也要发：不可训练回合（合宿 / 比赛）靠它区分「没有训练」和「字段缺失」。
+            baseGame.training = result;
+        }
+
+        /// <summary>
+        /// 累加到 7 项数组：target_type 1–5 → 速/耐/力/根/智，30 → 技能点，10 → 体力。
+        /// 顺序与剧本 <c>training.normal</c> 的基础值一致。
+        /// </summary>
+        static void Accumulate(int[] target, SingleModeParamsIncDecInfo[]? values)
+        {
+            foreach (var value in values ?? [])
+            {
+                switch (value.target_type)
+                {
+                    case >= 1 and <= 5:
+                        target[value.target_type - 1] += value.value;
+                        break;
+                    case 30:
+                        target[5] += value.value;
+                        break;
+                    case 10:
+                        target[6] += value.value;
+                        break;
+                }
+            }
         }
 
         /// <summary>
@@ -107,6 +171,7 @@ namespace SendGameStatusPlugin
         /// 稽古指令 5101–5105，骏大祭会整条丢掉训练位；<c>lockedTrainingId</c> 又按
         /// <c>command_id % 10</c> 计算，对 5101 之类的 id 无意义。故一律以快照为准重建，
         /// 锁定位置写 -1（本剧本不做训练位锁定）。
+        /// 每个训练位最多 5 人，超出截断（骏大祭实际也不会超过 5 人）。
         /// </summary>
         void ApplyPersonDistribution(FestaTurn snapshot)
         {
@@ -131,12 +196,32 @@ namespace SendGameStatusPlugin
             baseGame.lockedTrainingId = -1;
         }
 
-        /// <summary>协议 target_id → baseGame 的人头编号（卡位 0–5、理事长 6、记者 7、神驹 8）。</summary>
+        /// <summary>
+        /// 通用段 <c>persons</c> 只有 6 条（支援卡位 1–6），原实现把 <c>charaId</c> 一律留 0，
+        /// 导致按 targetId 反查不到角色。这里补真实 chara id；NPC 的 targetId 本身就是 chara id。
+        /// </summary>
+        void ApplyPersonCharaIds(SingleModeChara chara)
+        {
+            foreach (var card in chara.support_card_array ?? [])
+            {
+                var index = card.position - 1;
+                if (index is < 0 or >= 6)
+                    continue;
+                if (Database.Names.TryGetSupportCard(card.support_card_id, out var info))
+                    baseGame.persons[index].charaId = info.CharaId;
+            }
+        }
+
+        /// <summary>
+        /// 协议 target_id → baseGame 人头编号。<b>只有 NPC 用原始 ID</b>：
+        /// 支援卡位保持 BaseGame 的 0 基约定（1–6 → 0–5），理事长 102 → 6、记者 103 → 7；
+        /// NPC（≥1000）直接写 chara id，不再压成 8，否则身份全丢。
+        /// </summary>
         static int ToUmaAiPersonId(int targetId) => targetId switch
         {
             102 => 6,
             103 => 7,
-            >= 1000 => 8,
+            >= 1000 => targetId,
             _ => targetId - 1
         };
 
@@ -170,9 +255,6 @@ namespace SendGameStatusPlugin
 
             var trainLevelTotal = TrainLevelsFromProtocol(chara);
             var kensan = new bool[5];
-            var distribution = new int[5][];
-            for (var i = 0; i < 5; i++)
-                distribution[i] = [];
 
             foreach (var training in snapshot.Training)
             {
@@ -180,7 +262,6 @@ namespace SendGameStatusPlugin
                     continue;
                 trainLevelTotal[training.Index] = training.Level;
                 kensan[training.Index] = training.UpperTraining;
-                distribution[training.Index] = [.. training.Partners.Select(x => x.TargetId)];
             }
 
             return new FestaFrame
@@ -200,9 +281,7 @@ namespace SendGameStatusPlugin
                 ],
                 maxActLevel = snapshot.MaxActLevel,
                 campRemain = snapshot.CampRemaining,
-                // 状态 47 是「助力支撑可用」的开关，剩余次数挂在 home_info 上；
-                // 状态消失时次数无意义，写 0。
-                assistSupportLeft = snapshot.AssistSupportActive ? snapshot.AssistRemain : 0,
+                assistSupportLeft = snapshot.AssistSupportActive ? 1 : 0,
                 fatigueRecovery = snapshot.FatigueRecovery,
                 checkPoints =
                 [
@@ -219,12 +298,10 @@ namespace SendGameStatusPlugin
                     .. snapshot.Members.Select(member => new FestaPersonFrame
                     {
                         targetId = member.TargetId,
-                        charaId = member.CharaId,
                         actType = member.ActType,
                         origin = OriginOf(member.TargetId, supportCards)
                     })
-                ],
-                distribution = distribution
+                ]
             };
         }
 

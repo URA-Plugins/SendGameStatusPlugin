@@ -25,6 +25,22 @@ namespace SendGameStatusPlugin
         public int cardRecord = 0;
 
     }
+
+    /// <summary>
+    /// 单条训练指令的游戏侧数值。两层都是 7 项定长数组，顺序与剧本
+    /// <c>training.normal</c> 的基础值一致：速 / 耐 / 力 / 根 / 智 / 技能点 / 体力（负数为消耗）。
+    /// 数值是协议 <c>params_inc_dec_info_array</c> 的原值，<b>未做 1200 衰减</b>（与 <c>fiveStatus</c> 同口径）。
+    /// </summary>
+    public class TrainingFrame
+    {
+        /// <summary>该指令的 <c>failure_rate</c>。</summary>
+        public int failureRate;
+        /// <summary>下层：<c>home_info.command_info_array</c> 的增量，不含剧本加成。</summary>
+        public int[] lower = new int[7];
+        /// <summary>上层：剧本 <c>xxx_data_set.command_info_array</c> 的加成分量。逐项与 lower 相加即总增量。</summary>
+        public int[] upper = new int[7];
+    }
+
     public class GameStatusSend_Base<T>
     where T : PersonBase, new()
     {
@@ -44,6 +60,12 @@ namespace SendGameStatusPlugin
         public int skillScore;//已买技能的分数
         public int totalHints; // 总共Hint等级
         public int[] trainLevelCount;
+        /// <summary>
+        /// 本回合各训练指令的游戏侧数值，key 为指令 id（101–106 / 601–605 / 5101–5105 等，
+        /// 剧本专属 id 原样保留，映射交给 AI 端）。只列本回合可训练的指令，不可训练回合为空字典。
+        /// 剧本相关：目前仅骏大祭填充，其余剧本保持 null 不输出。
+        /// </summary>
+        public Dictionary<int, TrainingFrame>? training;
 
         public double ptScoreRate;
         public int failureRateBias;//失败率改变量。练习上手=2，练习下手=-2

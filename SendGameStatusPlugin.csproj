@@ -5,13 +5,13 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>2026.11.5</Version>
+    <Version>2026.11.7</Version>
 
     <PluginInternalName>SendGameStatusPlugin</PluginInternalName>
     <PluginDisplayName>向AI发送游戏信息</PluginDisplayName>
     <PluginAuthor>UmaAi Team</PluginAuthor>
     <PluginDescription>如果AI程序没打开就没任何作用</PluginDescription>
-    <PluginChangelog>新增骏大祭（剧本 15）状态发送：演目、教诲/转成、発表会、助力支撑、追加稽古与担当名单；训练等级改用历史点击数；新增拉面杯状态发送；修复响应来源、缺少主页数据时的处理和未试吃状态值；按育成 ID、回合及序号保存输出；同步可选插件依赖；更新 EventLoggerPlugin 与 RamenScenarioAnalyzer 源码依赖。</PluginChangelog>
+    <PluginChangelog>骏大祭：助力支撑按状态 47 输出 0/1，仅表示有无、不维护剩余次数；festa 段去掉与 baseGame 重复的人员分布，persons 只保留人物 id、来源与演目归属；NPC 人头写协议原始 id、persons 补真实 charaId。通用段新增 training：按指令 ID 给出下层/上层 7 项训练数值与失败率，供 AI 端比对自身计算；新增骏大祭（剧本 15）状态发送：演目、教诲/转成、発表会、追加稽古与担当名单；训练等级改用历史点击数；新增拉面杯状态发送；修复响应来源、缺少主页数据时的处理和未试吃状态值；按育成 ID、回合及序号保存输出；同步可选插件依赖；更新 EventLoggerPlugin 与 RamenScenarioAnalyzer 源码依赖。</PluginChangelog>
     <PluginRepositoryUrl>https://github.com/URA-Plugins/SendGameStatusPlugin</PluginRepositoryUrl>
     <PluginDependencies>EventLoggerPlugin,RamenScenarioAnalyzer,FestaScenarioAnalyzer</PluginDependencies>
   </PropertyGroup>

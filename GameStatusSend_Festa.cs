@@ -25,9 +25,12 @@ namespace SendGameStatusPlugin
     }
 
     /// <summary>
-    /// 担当名单条目。<c>targetId</c> 与 <c>baseGame.personDistribution</c> 同一编号空间
-    /// （支援卡位 1 基、理事长 102、记者 103、NPC ≥1000），但这里保留<b>协议原始值</b>，
-    /// 不做 BaseGame 的 0 基换算。演目归属只有这里能表达，故不进 <c>baseGame</c>。
+    /// 担当名单条目：谁属于哪个演目。<c>targetId</c> 与 <c>baseGame.personDistribution</c>
+    /// <b>同一编号空间</b>（卡位 1–6 → 0–5、理事长 102 → 6、记者 103 → 7、NPC ≥1000 用原始 id），
+    /// 已做 BaseGame 的 0 基换算，可以直接拿分布里的人头来查。
+    /// 只发有演目归属的成员（<c>actType &gt; 0</c>）：<c>actType == 0</c> 的是不参与演目的 guest，
+    /// 换算后 id 还会落进 100–114 与真实 charaId 混淆，故不发。
+    /// 演目归属只有这里能表达，不重复进 <c>baseGame</c>。
     /// <c>origin</c> 取 <c>card / friend / guest / yayoi / reporter</c>。
     /// </summary>
     public class FestaPersonFrame
@@ -308,12 +311,14 @@ namespace SendGameStatusPlugin
                 kensan = kensan,
                 persons =
                 [
-                    .. snapshot.Members.Select(member => new FestaPersonFrame
-                    {
-                        targetId = member.TargetId,
-                        actType = member.ActType,
-                        origin = OriginOf(member.TargetId, supportCards)
-                    })
+                    .. snapshot.Members
+                        .Where(member => member.ActType > 0)
+                        .Select(member => new FestaPersonFrame
+                        {
+                            targetId = ToUmaAiPersonId(member.TargetId),
+                            actType = member.ActType,
+                            origin = OriginOf(member.TargetId, supportCards)
+                        })
                 ]
             };
         }

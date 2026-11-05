@@ -4,3 +4,6 @@
 [submodule "RamenScenarioAnalyzer"]
 	path = deps/RamenScenarioAnalyzer
 	url = https://github.com/URA-Plugins/RamenScenarioAnalyzer.git
+[submodule "FestaScenarioAnalyzer"]
+	path = deps/FestaScenarioAnalyzer
+	url = https://github.com/URA-Plugins/FestaScenarioAnalyzer.git

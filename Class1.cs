@@ -14,6 +14,11 @@ public partial class SendGameStatusPlugin : IPlugin
 
     const string RamenCheckEventEndpoint = "/umamusume/single_mode_ramen/check_event";
 
+    // 骏大祭：change_short_cut、finish_claw_crane 不带 home_info，无法构造 base 段，故不注册。
+    // fusion_advice 没有育成身份与训练信息，等下一份完整响应。
+    const string FestaCommandEndpointRegex =
+        "^/umamusume/single_mode_festa/(?:attach_advice|check_event|check_point|continue|festa_live|gain_skills|race_entry|race_out)$";
+
     public void Initialize(IPluginContext context)
     {
         pluginContext = context;
@@ -42,6 +47,21 @@ public partial class SendGameStatusPlugin : IPlugin
         RegisterAnalyzer<SingleModeRamenCheckEventResponse>(
             EndpointPattern.Exact(RamenCheckEventEndpoint),
             resp => AnalyzeRamen(RamenResponse.FromCheckEvent(resp)));
+
+        // 骏大祭：4 种 response（Load / Start / ExecCommand / CheckEvent），
+        // 统一走中间类型 FestaResponse，再交给 AnalyzeFesta。
+        RegisterAnalyzer<SingleModeFestaLoadResponse>(
+            EndpointPattern.Exact("/umamusume/single_mode_festa/load"),
+            resp => AnalyzeFesta(FestaResponse.FromLoad(resp)));
+        RegisterAnalyzer<SingleModeFestaStartResponse>(
+            EndpointPattern.Exact("/umamusume/single_mode_festa/start"),
+            resp => AnalyzeFesta(FestaResponse.FromStart(resp)));
+        RegisterAnalyzer<SingleModeFestaExecCommandResponse>(
+            EndpointPattern.Exact("/umamusume/single_mode_festa/exec_command"),
+            resp => AnalyzeFesta(FestaResponse.FromExecCommand(resp)));
+        RegisterAnalyzer<SingleModeFestaCheckEventResponse>(
+            EndpointPattern.Regex(FestaCommandEndpointRegex),
+            resp => AnalyzeFesta(FestaResponse.FromCheckEvent(resp)));
 
         // 终局帧：育成结束·点技能前单独写一份 finalScore.json。用通用 response 类型 +
         // wildcard（同 SkillTipsResponseAnalyzer），全剧本共用；是否解析由 umaai 侧按

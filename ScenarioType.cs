@@ -9,5 +9,6 @@ internal enum ScenarioType
     Mecha = 9,
     Legend = 10,
     Onsen = 12,
-    Ramen = 14
+    Ramen = 14,
+    Festa = 15
 }

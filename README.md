@@ -1,6 +1,6 @@
 # SendGameStatusPlugin
 
-将育成回合状态转换为供本机 AI 程序读取的 JSON 文件。当前处理 L'Arc、U.A.F.、大丰食祭、机械、传说、温泉和拉面剧本，状态内容包括回合、基础属性、体力、干劲、技能点、支援卡与训练分布，以及对应剧本的附加数据。
+将育成回合状态转换为供本机 AI 程序读取的 JSON 文件。当前处理 L'Arc、U.A.F.、大丰食祭、机械、传说、温泉、拉面和骏大祭剧本，状态内容包括回合、基础属性、体力、干劲、技能点、支援卡与训练分布，以及对应剧本的附加数据。
 
 ## 输入与输出
 
@@ -10,13 +10,17 @@ JSON 写入 `PluginData/SendGameStatusPlugin/`：`thisTurn.json` 保存最近一
 
 拉面剧本使用 `scenarioId=14`。`baseGame.source` 区分 `load`、`command`、`event` 和 `special`；命令响应的 `playing_state >= 10` 记为 `special`，中间命令状态跳过输出。RamenScenarioAnalyzer 可用时读取其进程内快照补充地区、诀窍基础增量与检查点分数，快照缺失不阻止输出。`last_ramen=-1` 表示尚未品尝。
 
+骏大祭剧本使用 `scenarioId=15`，剧本段名为 `festa`。字段尽量原样转发协议，换算留给 matsuri：`acts`（演目 `act_type`/`gauge`/`level`/`need_act_gauge`、教诲 `advice_id` 与转成 `fusion_advice_id`）、`maxActLevel`、`campRemain`、`checkPoints`（`result_type` 原值）、`persons`（担当名单，`origin` 取 `card`/`friend`/`guest`/`yayoi`/`reporter`）、`distribution`（每个训练位的参与者 `target_id` 原值）、`kensan`（逐训练位追加稽古标记）、`assistSupportLeft`（状态 47 时取 `home_info.training_bonus_remain_turn_num`，否则 0）与 `fatigueRecovery`（状态 45）。`trainLevelTotal` 是协议总等级（含発表会 +1），`baseGame.trainLevelCount` 则存 EventLogger 累计的**成功普通训练次数**——两笔账必须分开，否则会把「离下一级还差 4 次」判错。
+
+骏大祭的帧依赖 FestaScenarioAnalyzer 的进程内快照（`FestaScenarioState.Snapshot`）：快照的 `CharaId`/`Turn` 与当前响应不一致时整帧跳过，不发出拼接错乱的帧；`change_short_cut`、`finish_claw_crane` 不带 `home_info`，不注册。`personDistribution` 与 `lockedTrainingId` 对骏大祭不可信（`ToTrainIndex` 没有稽古指令 5101–5105），改以快照的训练位参与者重建、锁定位置写 `-1`。
+
 终局帧：育成结束（`chara_info.state` 为 2 或 3、且无待处理事件）时，另外单独写一份 `finalScore.json`（固定名、扁平结构、只含五维/上限/剩余技能点/继承增量等终局数据，**不写** `thisTurn.json`，同一育成只写第一份）。判据与端点用通用 `single_mode*/check_event`、`single_mode*/load` 注册，全剧本共用；umaai 侧目前只消费 `scenarioId=14`。
 
 插件没有可配置项，也不连接、检测或启动 AI 进程。AI 未运行或未读取这些文件时，插件仍会生成 JSON，但不会产生 AI 计算或回传结果。
 
 ## 构建
 
-仓库通过 NuGet 包引用 Host API，通过 Git submodule 固定 EventLoggerPlugin 与 RamenScenarioAnalyzer 源码。克隆后在仓库根执行：
+仓库通过 NuGet 包引用 Host API，通过 Git submodule 固定 EventLoggerPlugin、RamenScenarioAnalyzer 与 FestaScenarioAnalyzer 源码。克隆后在仓库根执行：
 
 ```powershell
 git -c core.longpaths=true submodule update --init --recursive

@@ -185,6 +185,13 @@ namespace SendGameStatusPlugin
         {
         }
 
+        internal GameStatusSend_Base(
+            Gallop.SingleModeFestaCheckEventResponse @event,
+            EventLoggerRoundSnapshot round)
+            : this(CheckEventContext.From(@event), round)
+        {
+        }
+
         private GameStatusSend_Base(CheckEventContext @event, EventLoggerRoundSnapshot round)
         {
             islegal = false;
@@ -378,6 +385,16 @@ namespace SendGameStatusPlugin
                         persons[i].personType = 1;
                         friend_personId = i;
                         friend_type = 2;
+                        break;
+                    case 30323: // ssr 吾妻（骏大祭友人）
+                        persons[i].personType = 1;
+                        friend_personId = i;
+                        friend_type = 1;
+                        break;
+                    case 10149: // r 吾妻（骏大祭友人）
+                        persons[i].personType = 1;
+                        friend_personId = i;
+                        friend_type = 1;
                         break;
                     default:
                         persons[i].personType = 2;

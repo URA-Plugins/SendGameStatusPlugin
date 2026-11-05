@@ -54,7 +54,10 @@ namespace SendGameStatusPlugin
         public int assistSupportLeft;
         public bool fatigueRecovery;    // 状态 45
         public FestaCheckPointFrame[] checkPoints = [];
-        /// <summary>协议总等级（含発表会 +1），5 项按训练位排序。</summary>
+        /// <summary>
+        /// 5 个训练位的等级，按 速/耐/力/根/智 排序。<c>0</c> 表示<b>本帧没有有效值</b>
+        /// （合宿期只有稽古项、事件帧协议不回等级），不是「等级 0」；消费端应自行判未知。
+        /// </summary>
         public int[] trainLevelTotal = new int[5];
         /// <summary>追加稽古标记，逐训练位；engine 侧取任一为真。</summary>
         public bool[] kensan = new bool[5];
@@ -253,7 +256,7 @@ namespace SendGameStatusPlugin
                 .GroupBy(x => x.position)
                 .ToDictionary(x => x.Key, x => x.First().support_card_id);
 
-            var trainLevelTotal = TrainLevelsFromProtocol(chara, out var actLevels);
+            var trainLevelTotal = TrainLevelsFromProtocol(chara);
             var kensan = new bool[5];
 
             foreach (var training in snapshot.Training)
@@ -262,13 +265,11 @@ namespace SendGameStatusPlugin
                     continue;
                 kensan[training.Index] = training.UpperTraining;
 
-                // 稽古项的 level 恒 1，不是训练位等级，不覆盖（否则等级会在 3/1 间跳）。
+                // 稽古项的 level 恒 1，是稽古自身等级，与训练位等级无关，不参与。
                 if (training.CommandId is >= 5101 and <= 5105)
                     continue;
                 trainLevelTotal[training.Index] = training.Level;
             }
-
-            trainLevelTotal = StabilizeLevels(trainLevelTotal, actLevels, chara.single_mode_chara_id);
 
             return new FestaFrame
             {
@@ -312,61 +313,23 @@ namespace SendGameStatusPlugin
         }
 
         /// <summary>
-        /// 协议总等级（含発表会 +1）。快照没有训练位明细时（load / start 不算可训练帧）
-        /// 仍要给出真值，否则 matsuri 会把 <c>train_level_bonus</c> 算成负数。
-        /// 演目稽古位可能挂在 5101–5105 上，故两种 id 都认。
+        /// 逐训练位取协议等级，<b>只认基础训练项</b>（101–106 等）。稽古 5101–5105 的 level
+        /// 恒为 1、是稽古自身等级，与训练位等级不是同一量纲，直接跳过，绝不拿来填位。
+        /// 拿不到基础项的位保持 <c>0</c>（本帧无有效值），由消费端自行判未知，不做任何推算。
         /// </summary>
-        static int[] TrainLevelsFromProtocol(SingleModeChara chara, out int[] actLevels)
+        static int[] TrainLevelsFromProtocol(SingleModeChara chara)
         {
             var result = new int[5];
-            actLevels = new int[5];
             foreach (var info in chara.training_level_info_array ?? [])
             {
-                // 稽古（5101–5105）的 level 恒为 1（稽古自身等级），不代表训练位等级，
-                // 单独存起来只作首帧兜底，绝不写入训练位。
                 if (info.command_id is >= 5101 and <= 5105)
-                {
-                    var actIndex = info.command_id - 5101;
-                    if (actIndex is >= 0 and <= 4)
-                        actLevels[actIndex] = info.level;
                     continue;
-                }
 
                 var index = GameGlobal.ToTrainIndex.GetValueOrDefault(info.command_id, -1);
                 if (index is >= 0 and <= 4)
                     result[index] = info.level;
             }
             return result;
-        }
-
-        // 训练位等级只增不减。事件帧 / 合宿（只有稽古项）会拿到残缺的 0 或 1，
-        // 直接发出去会让消费端看到 3→1→3 的跳变，所以按局缓存上次已知值取大者。
-        static readonly object LevelGate = new();
-        static readonly int[] LastKnownLevels = new int[5];
-        static long levelCharaId;
-
-        static int[] StabilizeLevels(int[] levels, int[] actLevels, long charaId)
-        {
-            lock (LevelGate)
-            {
-                if (levelCharaId != charaId)
-                {
-                    levelCharaId = charaId;
-                    Array.Clear(LastKnownLevels);
-                }
-
-                var result = new int[5];
-                for (var i = 0; i < 5; i++)
-                {
-                    var value = Math.Max(Math.Max(levels[i], LastKnownLevels[i]), actLevels[i]);
-                    if (value == 0)
-                        value = 1;
-                    value = Math.Min(value, 10);
-                    result[i] = value;
-                    LastKnownLevels[i] = value;
-                }
-                return result;
-            }
         }
 
         static string OriginOf(int targetId, Dictionary<int, int> supportCards)

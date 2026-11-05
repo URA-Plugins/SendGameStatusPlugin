@@ -158,6 +158,7 @@ namespace SendGameStatusPlugin
         /// - "event" + story 有值                    → "event"（事件帧仅在 story 有值时保存）
         /// - "event" + story null + UncheckedEventArray 有内容 → null（无需玩家选择的事件进行中，不保存）
         /// - "event" + story null + UncheckedEventArray 为空 + 1 < playing_state < 10 → null
+        /// - "event" + story null + UncheckedEventArray 为空 + playing_state >= 10 → "special"（结算）
         /// - "event" + story null + UncheckedEventArray 为空 + playing_state 其它 → "command"
         /// - 其它（load / 业务自定义）                → 原样保留
         /// </summary>
@@ -174,6 +175,8 @@ namespace SendGameStatusPlugin
                 "event" when uncheckedEventArray is null or { Length: 0 }
                                            && playing_state > 1
                                            && playing_state < 10       => null,
+                // 剧本结算（ps 49/51 等 >=10）不是回合开始，与 command 分支同口径标 special。
+                "event" when playing_state >= 10                       => "special",
                 "event"                                               => "command",
                 _                                                     => source,
             };

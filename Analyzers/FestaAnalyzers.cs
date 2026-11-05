@@ -107,6 +107,12 @@ public partial class SendGameStatusPlugin
             return ValueTask.CompletedTask;
 
         send.baseGame.source = finalSource;
+
+        // 事件 / 结算帧协议不回训练位等级（基础项会被填成默认 1），按「无有效值」发 0；
+        // 只有回合开始（command）与 load 帧的等级可信。
+        if (finalSource is "event" or "special" && send.festa is not null)
+            send.festa.trainLevelTotal = new int[5];
+
         send.doSend();
         return ValueTask.CompletedTask;
     }

@@ -55,10 +55,13 @@ namespace SendGameStatusPlugin
         public bool fatigueRecovery;    // 状态 45
         public FestaCheckPointFrame[] checkPoints = [];
         /// <summary>
-        /// 5 个训练位的等级，按 速/耐/力/根/智 排序。<c>0</c> 表示<b>本帧没有有效值</b>
+        /// 5 个训练位的等级，按 速/耐/力/根/智 排序。<c>0</c> 表示<b>本帧拿不到可信值</b>
         /// （合宿期只有稽古项、事件帧协议不回等级），不是「等级 0」；消费端应自行判未知。
         /// </summary>
         public int[] trainLevelTotal = new int[5];
+
+        /// <summary>本帧哪些位拿到了快照里的基础训练项等级（内部用，不序列化）。</summary>
+        internal bool[] trustedLevel = new bool[5];
         /// <summary>追加稽古标记，逐训练位；engine 侧取任一为真。</summary>
         public bool[] kensan = new bool[5];
         /// <summary>
@@ -257,6 +260,7 @@ namespace SendGameStatusPlugin
                 .ToDictionary(x => x.Key, x => x.First().support_card_id);
 
             var trainLevelTotal = TrainLevelsFromProtocol(chara);
+            var trustedLevel = new bool[5];
             var kensan = new bool[5];
 
             foreach (var training in snapshot.Training)
@@ -269,10 +273,12 @@ namespace SendGameStatusPlugin
                 if (training.CommandId is >= 5101 and <= 5105)
                     continue;
                 trainLevelTotal[training.Index] = training.Level;
+                trustedLevel[training.Index] = true;
             }
 
             return new FestaFrame
             {
+                trustedLevel = trustedLevel,
                 acts =
                 [
                     .. snapshot.Acts.Select(act => new FestaActFrame
@@ -330,6 +336,45 @@ namespace SendGameStatusPlugin
                     result[index] = info.level;
             }
             return result;
+        }
+
+        // 训练位等级基准：只有 load / command 帧的协议值可信（load 是整局快照，数据更全）。
+        // 合宿与终盘只能稽古，协议不回基础项，这些帧缺失的位用最近一次观测值补齐；
+        // 事件 / 结算帧协议把基础项填成默认 1、不可信，仍发 0。
+        static readonly object LevelBaselineGate = new();
+        static readonly int[] LevelBaseline = new int[5];
+        static long levelBaselineCharaId;
+
+        internal void ApplyLevelBaseline(string? source)
+        {
+            if (festa is null)
+                return;
+
+            var authoritative = source is "command" or "load";
+            lock (LevelBaselineGate)
+            {
+                if (levelBaselineCharaId != baseGame.single_mode_chara_id)
+                {
+                    levelBaselineCharaId = baseGame.single_mode_chara_id;
+                    Array.Clear(LevelBaseline);
+                }
+
+                for (var i = 0; i < 5; i++)
+                {
+                    if (!authoritative)
+                    {
+                        festa.trainLevelTotal[i] = 0;
+                        continue;
+                    }
+
+                    // 只有快照里的基础训练项等级可信；协议原值在不可训练回合也会被填成 1，
+                    // 不能拿来更新基准，缺可信值时一律用基准。
+                    if (festa.trustedLevel[i])
+                        LevelBaseline[i] = festa.trainLevelTotal[i];
+                    else
+                        festa.trainLevelTotal[i] = LevelBaseline[i];
+                }
+            }
         }
 
         static string OriginOf(int targetId, Dictionary<int, int> supportCards)

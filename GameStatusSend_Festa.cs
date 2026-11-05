@@ -253,16 +253,22 @@ namespace SendGameStatusPlugin
                 .GroupBy(x => x.position)
                 .ToDictionary(x => x.Key, x => x.First().support_card_id);
 
-            var trainLevelTotal = TrainLevelsFromProtocol(chara);
+            var trainLevelTotal = TrainLevelsFromProtocol(chara, out var actLevels);
             var kensan = new bool[5];
 
             foreach (var training in snapshot.Training)
             {
                 if (training.Index is < 0 or > 4)
                     continue;
-                trainLevelTotal[training.Index] = training.Level;
                 kensan[training.Index] = training.UpperTraining;
+
+                // 稽古项的 level 恒 1，不是训练位等级，不覆盖（否则等级会在 3/1 间跳）。
+                if (training.CommandId is >= 5101 and <= 5105)
+                    continue;
+                trainLevelTotal[training.Index] = training.Level;
             }
+
+            trainLevelTotal = StabilizeLevels(trainLevelTotal, actLevels, chara.single_mode_chara_id);
 
             return new FestaFrame
             {
@@ -310,18 +316,57 @@ namespace SendGameStatusPlugin
         /// 仍要给出真值，否则 matsuri 会把 <c>train_level_bonus</c> 算成负数。
         /// 演目稽古位可能挂在 5101–5105 上，故两种 id 都认。
         /// </summary>
-        static int[] TrainLevelsFromProtocol(SingleModeChara chara)
+        static int[] TrainLevelsFromProtocol(SingleModeChara chara, out int[] actLevels)
         {
             var result = new int[5];
+            actLevels = new int[5];
             foreach (var info in chara.training_level_info_array ?? [])
             {
-                var index = info.command_id is >= 5101 and <= 5105
-                    ? info.command_id - 5101
-                    : GameGlobal.ToTrainIndex.GetValueOrDefault(info.command_id, -1);
+                // 稽古（5101–5105）的 level 恒为 1（稽古自身等级），不代表训练位等级，
+                // 单独存起来只作首帧兜底，绝不写入训练位。
+                if (info.command_id is >= 5101 and <= 5105)
+                {
+                    var actIndex = info.command_id - 5101;
+                    if (actIndex is >= 0 and <= 4)
+                        actLevels[actIndex] = info.level;
+                    continue;
+                }
+
+                var index = GameGlobal.ToTrainIndex.GetValueOrDefault(info.command_id, -1);
                 if (index is >= 0 and <= 4)
                     result[index] = info.level;
             }
             return result;
+        }
+
+        // 训练位等级只增不减。事件帧 / 合宿（只有稽古项）会拿到残缺的 0 或 1，
+        // 直接发出去会让消费端看到 3→1→3 的跳变，所以按局缓存上次已知值取大者。
+        static readonly object LevelGate = new();
+        static readonly int[] LastKnownLevels = new int[5];
+        static long levelCharaId;
+
+        static int[] StabilizeLevels(int[] levels, int[] actLevels, long charaId)
+        {
+            lock (LevelGate)
+            {
+                if (levelCharaId != charaId)
+                {
+                    levelCharaId = charaId;
+                    Array.Clear(LastKnownLevels);
+                }
+
+                var result = new int[5];
+                for (var i = 0; i < 5; i++)
+                {
+                    var value = Math.Max(Math.Max(levels[i], LastKnownLevels[i]), actLevels[i]);
+                    if (value == 0)
+                        value = 1;
+                    value = Math.Min(value, 10);
+                    result[i] = value;
+                    LastKnownLevels[i] = value;
+                }
+                return result;
+            }
         }
 
         static string OriginOf(int targetId, Dictionary<int, int> supportCards)

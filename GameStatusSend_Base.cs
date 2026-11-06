@@ -127,6 +127,13 @@ namespace SendGameStatusPlugin
         public int[] inheritGains;
 
         /// <summary>
+        /// 每次继承事件带来的五维上限增量，按继承发生顺序，逐项对应 <c>fiveStatusLimit</c> 的五维。
+        /// 协议原值，未做 1200 以上不减半换算（与 <c>fiveStatusLimit</c> 不同口径）。
+        /// 第 2、3 次继承的上限增量是随机的，不能按蓝因子重算，只能取实测量。
+        /// </summary>
+        public int[][] inheritLimitGains;
+
+        /// <summary>
         /// 本局累计花掉的技能点（购买技能等导致的 pt 减少，由 EventLogger 逐次累计）。
         /// </summary>
         public int skillPtSpent;
@@ -254,6 +261,7 @@ namespace SendGameStatusPlugin
             // keyEvents 与 inheritGains：story_id 与属性增量均保持原值，不做回合数换算
             keyEvents = round.KeyEvents.ToArray();
             inheritGains = round.InheritStats.ToArray();
+            inheritLimitGains = round.InheritLimitGains.Select(x => x.ToArray()).ToArray();
 
             // 本局累计花掉的技能点
             skillPtSpent = round.SkillPtSpent;

@@ -32,16 +32,17 @@ internal static class GameStatusOutput
         => WritePluginData(payload, turn);
 
     /// <summary>
-    /// 终局帧专用输出：固定文件名 <c>finalScore.json</c>（与局号、回合无关）。
+    /// 终局帧专用输出：<c>game{charaId}_finalScore.json</c>，按育成 ID 区分不同局。
     /// 不写 <c>thisTurn.json</c>、不参与回合序号计数——终局帧不进决策链路。
+    /// 帧内同时携带整局玩家动作（<c>actions</c>），与终局数据一次原子落盘。
     /// </summary>
-    public static void WriteFinalScore(object payload)
+    public static void WriteFinalScore(object payload, long charaId)
     {
         lock (WriteGate)
         {
             Directory.CreateDirectory(PluginDataDirectory);
             var json = JsonConvert.SerializeObject(payload, Formatting.Indented, Settings);
-            WriteAtomically(Path.Combine(PluginDataDirectory, "finalScore.json"), json);
+            WriteAtomically(Path.Combine(PluginDataDirectory, $"game{charaId}_finalScore.json"), json);
         }
     }
 

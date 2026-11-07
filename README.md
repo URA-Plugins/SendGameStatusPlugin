@@ -16,7 +16,28 @@ JSON 写入 `PluginData/SendGameStatusPlugin/`：`thisTurn.json` 保存最近一
 
 骏大祭的帧依赖 FestaScenarioAnalyzer 的进程内快照（`FestaScenarioState.Snapshot`）：快照的 `CharaId`/`Turn` 与当前响应不一致时整帧跳过，不发出拼接错乱的帧；`change_short_cut`、`finish_claw_crane` 不带 `home_info`，不注册。`personDistribution` 与 `lockedTrainingId` 对骏大祭不可信（`ToTrainIndex` 没有稽古指令 5101–5105），改以快照的训练位参与者重建、锁定位置写 `-1`。人头沿用 BaseGame 的既有约定（卡位 1–6 → 0–5、理事长 102 → 6、记者 103 → 7），**只有 NPC（≥1000）写协议原始 id**，不再压成 `8`，否则身份会丢；每个训练位最多 5 人，超出截断。`baseGame.persons[i].charaId` 由支援卡表补真实角色 id（NPC 的 `target_id` 本身即角色 id）；`festa.persons` 沿用同一套人头编号（卡位 0–5、理事长 6、记者 7、NPC 原始 id），不带 charaId，可以直接用分布里的值来查。
 
-终局帧：育成结束（`chara_info.state` 为 2 或 3、且无待处理事件）时，另外单独写一份 `finalScore.json`（固定名、扁平结构、只含五维/上限/剩余技能点/继承增量等终局数据，**不写** `thisTurn.json`，同一育成只写第一份）。判据与端点用通用 `single_mode*/check_event`、`single_mode*/load` 注册，全剧本共用；umaai 侧目前只消费 `scenarioId=14`。
+终局帧：育成结束（`chara_info.state` 为 2 或 3、且无待处理事件）时，另外单独写一份 `game<育成ID>_finalScore.json`（扁平结构，**不写** `thisTurn.json`，同一育成只写第一份）。判据与端点用通用 `single_mode*/check_event`、`single_mode*/load` 注册，全剧本共用。`game<育成ID>_final.json` 是记录器把该帧原文归档进局包时另起的名字，两者不是同一份文件。
+
+终局帧在原有终局字段之外，顶层增加两个字段：
+
+- `actionSchemaVersion`：动作段结构版本，当前为 `1`。消费端靠它区分带采集的新帧与历史老帧；历史局包无此字段时读不到动作应回退到状态差推断，不能当作「玩家没动作」。
+- `actions`：玩家实际动作序列，**即使为空也输出 `[]`**。`exec_command` / `check_event` / `race_entry` 三类请求在进程内按到达顺序累积（宿主 `dispatchGate` 串行派发，数组下标即真实点击顺序），只有正常终局才一次性落盘；全程不写中间文件、不进决策链路。
+
+`actions[]` 元素为 `turn`（**0 基**，`= current_turn - 1`，与 `game<育成ID>_turn<回合>.json` 同口径）、`endpoint`（端点尾段短名）加上请求 `xxx_request_common` 的全部 public 字段按协议原名（snake_case）展平，例如 `command_type` / `command_id` / `event_id` / `choice_number` / `program_id`；`current_turn` 已由 `turn` 承载，不重复落盘。只记协议原值，**不做语义分类**（`command_type` 取值表待真机采样后再定）。`RequestId` 只用作进程内去重键，不写入 JSON。`actions` 的语义是「本次插件进程内捕获到的动作序列」：中途加载或断线重连的前半局天然缺失，消费方不得把某回合没有动作解读成玩家没操作。终局帧只写第一份，之后结算画面的请求不再记入。
+
+### 单选项自动事件过滤
+
+`check_event` 请求里的 `choice_number=0` 有两种含义：玩家在多选项里主动选了第 0 项，或该事件只有一个选项、客户端自动确认。请求侧只有 `event_id / choice_number`，**无法区分**，因此不能按 `choice_number == 0` 硬过滤（真机 game6310 里 `10002` 出现过 `{0,1,2}`、`10000` 出现过 `{0,1}`，它们的 0 是真实选择）。
+
+插件从响应侧 `unchecked_event_array[].event_contents_info.choice_array.Length` 收集 `event_id → 选项数`，整局按 `event_id` 取**最大值**（某个 ID 只要见过一次多选项，就永不判成自动事件）；终局 `TakeSnapshot()` 时丢弃「见过的最大选项数 ≤ 1」的 `check_event`。`choice_array` 为 null（协议没给）的 `event_id` 一律**保留**——宁可漏过滤，也不误删真实选择。切局与取快照时清空观察表。
+
+观察来源为四个通用响应：`check_event` / `load`（现有终局判据注册里顺带取）以及新增的 `exec_command` / `continue` 两个 wildcard 注册（覆盖「指令或赛程之后弹出一串事件」的串首）。新增注册只喂内存观察表，**不写任何文件、不动 `TurnSequence`、不进决策链路**；各剧本响应的 `unchecked_event_array` 层级一致，通用 DTO 对剧本专属的 `*_data_set` 字段由 `GallopMessagePackFormatter` 跳过未知 key，可安全复用。
+
+⚠️ **待真机验证**：判定前提是「单选项自动事件确实出现在 `unchecked_event_array` 里」。第一局请对比 `actions` 中 `check_event` 的条数（game6310 改版前为 193 条，其中 160 条 `choice_number=0`、97 个 `event_id` 整局恒为 0）。若过滤后仍接近 193，说明自动事件不进该列表，需换判定源（按 `event_id` 查静态事件表，或退到带误删风险的启发式），**不要**改成按 `choice_number` 硬过滤。
+
+两个 Rust 消费端的终局帧结构没有 `deny_unknown_fields`，这两个顶层字段会被 serde 静默忽略；记录器以**原文**落盘 `game<育成ID>_final.json` 并打包，因此动作数据自动进入局包，未来复盘直接从顶层读 `actions`。`umaai-rs-ref` 的 `on_final` 目前只接纳 `scenarioId=14`，其他剧本的帧仍留在插件目录，是否放宽属消费端调整范围。
+
+注意：上面的归档链路以「消费端已把白名单同步为 `game<育成ID>_finalScore.json`」为前提。本轮**只改插件端**，消费端尚未同步（见 `URA_Plugins/handoff-2026-11-06.md` §7.4），在此之前终局帧不会被 AI 引擎接收、也不会进局包；真机验证请直接检查插件目录下的 `game<育成ID>_finalScore.json`。
 
 插件没有可配置项，也不连接、检测或启动 AI 进程。AI 未运行或未读取这些文件时，插件仍会生成 JSON，但不会产生 AI 计算或回传结果。
 

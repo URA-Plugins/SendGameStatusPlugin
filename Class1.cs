@@ -63,7 +63,7 @@ public partial class SendGameStatusPlugin : IPlugin
             EndpointPattern.Regex(FestaCommandEndpointRegex),
             resp => AnalyzeFesta(FestaResponse.FromCheckEvent(resp)));
 
-        // 终局帧：育成结束·点技能前单独写一份 finalScore.json。用通用 response 类型 +
+        // 终局帧：育成结束·点技能前单独写一份 game{charaId}_finalScore.json。用通用 response 类型 +
         // wildcard（同 SkillTipsResponseAnalyzer），全剧本共用；是否解析由 umaai 侧按
         // scenarioId 决定。终局帧不进决策链路，故独立于上面的回合快照注册。
         RegisterAnalyzer<SingleModeCheckEventResponse>(
@@ -74,6 +74,55 @@ public partial class SendGameStatusPlugin : IPlugin
             resp => AnalyzeGameEnd(
                 resp.data?.single_mode_load_common?.chara_info,
                 resp.data?.single_mode_load_common?.unchecked_event_array));
+
+        // 事件选项数观察：请求侧没有选项数，只有响应侧的
+        // unchecked_event_array[].event_contents_info.choice_array.Length 能区分
+        // 「玩家选了第 0 项」与「仅一个选项、客户端自动确认」。
+        // check_event / load 已由上面的 AnalyzeGameEnd 顺带观察；这里补两个通用注册，
+        // 覆盖「指令 / 赛程之后弹出一串事件」的串首，wildcard 全剧本共用。
+        // 各剧本 exec_command / continue 响应的 unchecked_event_array 层级一致，
+        // 通用 DTO 对剧本专属的 *_data_set 字段宽容（formatter 对未知 key 直接 Skip）。
+        // handler 只喂内存观察表：不写任何文件、不动 TurnSequence、不进决策链路。
+        RegisterAnalyzer<SingleModeExecCommandResponse>(
+            EndpointPattern.Wildcard("/umamusume/single_mode*/exec_command"),
+            resp => ObserveEventChoices(resp.data?.unchecked_event_array));
+        RegisterAnalyzer<SingleModeContinueResponse>(
+            EndpointPattern.Wildcard("/umamusume/single_mode*/continue"),
+            resp => ObserveEventChoices(resp.data?.unchecked_event_array));
+
+        // 玩家动作采集：只在进程内累积，正常终局时随终局帧一次性落盘，不写中间文件。
+        // 各剧本专属 Request 的 MessagePack 结构与通用类型一致（同名同类型的
+        // xxx_request_common），故用通用类型 + wildcard 全剧本共用（同 EventLogger 的做法）。
+        context.Analyzers.Register<SingleModeExecCommandRequest>(
+            AnalyzerKind.Request,
+            [EndpointPattern.Wildcard("/umamusume/single_mode*/exec_command")],
+            invocation => RecordAction("exec_command",
+                invocation.Payload.single_mode_exec_command_request_common, invocation.Headers.RequestId),
+            priority: 2);
+        context.Analyzers.Register<SingleModeCheckEventRequest>(
+            AnalyzerKind.Request,
+            [EndpointPattern.Wildcard("/umamusume/single_mode*/check_event")],
+            invocation => RecordAction("check_event",
+                invocation.Payload.single_mode_check_event_request_common, invocation.Headers.RequestId),
+            priority: 2);
+        context.Analyzers.Register<SingleModeRaceEntryRequest>(
+            AnalyzerKind.Request,
+            [EndpointPattern.Wildcard("/umamusume/single_mode*/race_entry")],
+            invocation => RecordAction("race_entry",
+                invocation.Payload.single_mode_race_entry_request_common, invocation.Headers.RequestId),
+            priority: 2);
+    }
+
+    static ValueTask RecordAction(string endpoint, object? common, Guid requestId)
+    {
+        ActionLog.Record(endpoint, common, requestId);
+        return ValueTask.CompletedTask;
+    }
+
+    static ValueTask ObserveEventChoices(SingleModeEventInfo[]? events)
+    {
+        ActionLog.ObserveEvents(events);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>

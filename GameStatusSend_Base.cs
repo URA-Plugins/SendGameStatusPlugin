@@ -75,13 +75,15 @@ namespace SendGameStatusPlugin
         public bool isAiJiao;//爱娇
         public int PositiveThinkingCount;//心情盾次数：拥有状态25/41/42时各+1，最多3次（每次可防一次掉心情）
         public bool isRefreshMind;//休息的心得,每回合体力+5
-        public bool isIll; // 生病，不区分种类
+        public bool isIll; // 生病，不区分种类（只看 142 表的 1–6）
         /// <summary>
-        /// 生病病种：游戏 <c>chara_effect_id</c> 原值，按 142 表
-        /// （1 熬夜 / 2 懒惰成性 / 3 皮肤粗糙 / 4 变胖 / 5 偏头痛 / 6 不擅长练习）。
-        /// 原值透传，语义由消费端自行解释；<c>isIll</c> 仍是「有没有病」的布尔。
+        /// 马娘持有状态：游戏 <c>chara_effect_id_array</c> 原值，按协议顺序去重、过滤非正值。
+        /// 含 1–6 病种（142 表：1 熬夜 / 2 懒惰成性 / 3 皮肤粗糙 / 4 变胖 /
+        /// 5 偏头痛 / 6 不擅长练习）与全部其它状态（7 切者、25 正向思考、45 消除疲劳、
+        /// 47 助力支撑、100–104 情热领域等）。语义由消费端按自己的数据解释。
+        /// <c>isIll</c> 只表示 1–6 病种是否存在，与本数组是否非空无关。
         /// </summary>
-        public int[] illEffects = [];
+        public int[] charaEffects = [];
         public int LuckyCount;//幸运体质次数：拥有状态26/43时各+1
 
         public int[] zhongMaBlueCount;//种马的蓝因子个数，假设只有3星
@@ -303,11 +305,16 @@ namespace SendGameStatusPlugin
             };
 
             failureRateBias = 0;
-            var illIds = new List<int>();
-            foreach (var effect in @event.data.chara_info.chara_effect_id_array ?? [])
+            // 全量状态原值透传：只做「过滤非正值 / 去重」，不做语义分类，顺序沿用协议。
+            charaEffects = (@event.data.chara_info.chara_effect_id_array ?? [])
+                .Where(effect => effect > 0)
+                .Distinct()
+                .ToArray();
+            // isIll 仍是「有没有病」，不能按数组非空判断（否则只有 buff 的回合会误判成生病）。
+            isIll = charaEffects.Any(effect => effect is >= 1 and <= 6);
+
+            foreach (var effect in charaEffects)
             {
-                if (effect is >= 1 and <= 6)    // 142 表：1-6 为生病，其余是其它状态
-                    illIds.Add(effect);
                 switch (effect)
                 {
                     case 6:
@@ -331,9 +338,6 @@ namespace SendGameStatusPlugin
                         isRefreshMind = true; break;
                 }
             }
-            illEffects = illIds.ToArray();
-            isIll = illEffects.Length > 0;
-
             ptScoreRate = 2.0;
 
             skillPt = @event.data.chara_info.skill_point;

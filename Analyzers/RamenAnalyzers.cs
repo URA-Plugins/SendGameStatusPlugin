@@ -34,7 +34,7 @@ public sealed record RamenResponse(
 
     /// <summary>
     /// 把 SingleModeRamenCheckEventResponse 映射为 RamenResponse。
-    /// 钩子要求 baseGame.story 非空时才发。
+    /// 事件帧由 baseGame.ResolveSource 依 storyId 判定（多选项即发）。
     /// </summary>
     public static RamenResponse FromCheckEvent(SingleModeRamenCheckEventResponse r)
         => new(

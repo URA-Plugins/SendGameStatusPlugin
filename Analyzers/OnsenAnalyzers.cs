@@ -15,7 +15,8 @@ public partial class SendGameStatusPlugin
 
         foreach (var ev in response.data.unchecked_event_array)
         {
-            if (ev.event_contents_info.choice_array.Length < 2 || !Database.Events.ContainsKey(ev.story_id))
+            // 多选项（>1）即需要玩家手动选择；效果表查不到也照发，由消费端按 storyId 自行处理。
+            if (ev is null || ev.event_contents_info?.choice_array is not { Length: > 1 })
                 continue;
 
             var gameStatusToSend = new GameStatusSend_Onsen(response);

@@ -76,6 +76,12 @@ namespace SendGameStatusPlugin
         public int PositiveThinkingCount;//心情盾次数：拥有状态25/41/42时各+1，最多3次（每次可防一次掉心情）
         public bool isRefreshMind;//休息的心得,每回合体力+5
         public bool isIll; // 生病，不区分种类
+        /// <summary>
+        /// 生病病种：游戏 <c>chara_effect_id</c> 原值，按 142 表
+        /// （1 熬夜 / 2 懒惰成性 / 3 皮肤粗糙 / 4 变胖 / 5 偏头痛 / 6 不擅长练习）。
+        /// 原值透传，语义由消费端自行解释；<c>isIll</c> 仍是「有没有病」的布尔。
+        /// </summary>
+        public int[] illEffects = [];
         public int LuckyCount;//幸运体质次数：拥有状态26/43时各+1
 
         public int[] zhongMaBlueCount;//种马的蓝因子个数，假设只有3星
@@ -150,34 +156,46 @@ namespace SendGameStatusPlugin
         /// </summary>
         public string? source { get; set; }
 
+        /// <summary>
+        /// 本帧等待玩家选择的事件 <c>story_id</c>（协议原值）。
+        /// 只要 <c>unchecked_event_array</c> 里存在多选项（<c>choice_array.Length > 1</c>）就设置，
+        /// 与事件效果表是否收录无关；消费端据此自行查表判断。空值时不输出该字段。
+        /// 同时作为 <see cref="ResolveSource"/> 判定「事件帧」的信号。
+        /// </summary>
+        public int? storyId;
+
+        /// <summary>
+        /// 事件效果表收录时附带的效果数据（含选项效果）；未收录或表未加载时为 null，不输出。
+        /// 是否发送由 <see cref="storyId"/> 决定，与本字段无关。
+        /// </summary>
         public Story story;
 
         /// <summary>
-        /// 基于本实例的 <see cref="source"/> / <see cref="playing_state"/> / <see cref="story"/> 字段
+        /// 基于本实例的 <see cref="source"/> / <see cref="playing_state"/> / <see cref="storyId"/> 字段
         /// 与外部传入的 <paramref name="uncheckedEventArray"/> 综合解析为最终 source。
         /// 返回 null 表示本帧不发送（调用方应跳过 doSend）。
         /// 规则（按本实例的 source 分支）：
-        /// - "command" + story 有值                    → "event"（响应携带待处理事件，story 优先于 command）
-        /// - "command" + UncheckedEventArray 有内容    → null（无需玩家选择的事件进行中，不保存）
+        /// - "command" + storyId 有值                  → "event"（响应携带待选事件，优先于 command）
+        /// - "command" + UncheckedEventArray 有内容    → null（仅自动事件进行中，不保存）
         /// - "command" + playing_state == 1          → "command"
         /// - "command" + 1 < playing_state < 10      → null（中间状态，跳过发送）
         /// - "command" + playing_state >= 10         → "special"
-        /// - "event" + story 有值                    → "event"（事件帧仅在 story 有值时保存）
-        /// - "event" + story null + UncheckedEventArray 有内容 → null（无需玩家选择的事件进行中，不保存）
-        /// - "event" + story null + UncheckedEventArray 为空 + 1 < playing_state < 10 → null
-        /// - "event" + story null + UncheckedEventArray 为空 + playing_state >= 10 → "special"（结算）
-        /// - "event" + story null + UncheckedEventArray 为空 + playing_state 其它 → "command"
+        /// - "event" + storyId 有值                   → "event"（有手动选项即保存，效果记录非必要）
+        /// - "event" + storyId 空 + UncheckedEventArray 有内容 → null（仅自动事件进行中，不保存）
+        /// - "event" + storyId 空 + UncheckedEventArray 为空 + 1 < playing_state < 10 → null
+        /// - "event" + storyId 空 + UncheckedEventArray 为空 + playing_state >= 10 → "special"（结算）
+        /// - "event" + storyId 空 + UncheckedEventArray 为空 + playing_state 其它 → "command"
         /// - 其它（load / 业务自定义）                → 原样保留
         /// </summary>
         public string? ResolveSource(SingleModeEventInfo[]? uncheckedEventArray)
             => source switch
             {
-                "command" when story is not null                      => "event",
+                "command" when storyId is not null                    => "event",
                 "command" when uncheckedEventArray is { Length: > 0 } => null,
                 "command" when playing_state == 1                     => "command",
                 "command" when playing_state < 10                     => null,
                 "command"                                             => "special",
-                "event" when story is not null                        => "event",
+                "event" when storyId is not null                      => "event",
                 "event" when uncheckedEventArray is { Length: > 0 }   => null,
                 "event" when uncheckedEventArray is null or { Length: 0 }
                                            && playing_state > 1
@@ -285,10 +303,11 @@ namespace SendGameStatusPlugin
             };
 
             failureRateBias = 0;
-            foreach (var effect in @event.data.chara_info.chara_effect_id_array)
+            var illIds = new List<int>();
+            foreach (var effect in @event.data.chara_info.chara_effect_id_array ?? [])
             {
-                if (effect <= 6)    // 1-6生病
-                    isIll = true;
+                if (effect is >= 1 and <= 6)    // 142 表：1-6 为生病，其余是其它状态
+                    illIds.Add(effect);
                 switch (effect)
                 {
                     case 6:
@@ -312,6 +331,8 @@ namespace SendGameStatusPlugin
                         isRefreshMind = true; break;
                 }
             }
+            illEffects = illIds.ToArray();
+            isIll = illEffects.Length > 0;
 
             ptScoreRate = 2.0;
 
@@ -530,17 +551,19 @@ namespace SendGameStatusPlugin
                 friend_outgoingUsed = 0;
             }
 
-            // 如果有等待选择的事件，则以story字段发送
-            if (@event.data.unchecked_event_array != null)
+            // 多选项（>1）即视为需要玩家手动选择：记录 story_id 并据此发帧。
+            // 效果表只是附带数据，查不到也照发，由消费端按 storyId 自行处理。
+            // 一串事件里优先取第一个有手动选项的；连续到达的事件帧各自落盘，不做去重。
+            foreach (var evt in @event.data.unchecked_event_array ?? [])
             {
-                foreach (var evt in @event.data.unchecked_event_array)
-                {
-                    if (evt.event_contents_info.choice_array.Length >= 2 && Database.Events.ContainsKey(evt.story_id))
-                    {
-                        story = Database.Events[evt.story_id];
-                        break;
-                    }
-                }
+                if (evt is null || evt.event_contents_info?.choice_array is not { Length: > 1 })
+                    continue;
+
+                storyId = evt.story_id;
+                if (Database.Availability == DatabaseAvailability.Ready
+                    && Database.Events.TryGetValue(evt.story_id, out var known))
+                    story = known;
+                break;
             }
         }
 
